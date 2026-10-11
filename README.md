@@ -325,6 +325,11 @@ DEPLOYER_KEY=0x... npm run deploy -- --network testnet --yes    # broadcast seve
 DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --yes
 ```
 
+Testnet can be deployed from the page itself, with no key outside your browser: pick BOT Chain
+Testnet, get test BOT for the browser wallet, and press *Deploy the bazaar* (seven transactions,
+about 11M gas). The page uses the new set right away in that browser and shows the record to
+commit as `deployments/968.json`, after which everyone gets it.
+
 Testnet can also be deployed from GitHub: add a repository secret `DEPLOYER_KEY` (a testnet-only
 wallet funded from the faucet, for example the browser wallet above via *Copy private key*), then run the **deploy-testnet** workflow, first as a dry run and
 then with *broadcast* ticked. It commits `deployments/968.json` and rebuilds the Pages site, which

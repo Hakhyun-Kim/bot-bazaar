@@ -16,7 +16,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import abiJson from "./abi.json";
 import type { DemoChain } from "./demo";
 import type { Target, WorldApi, WorldData } from "./world/World";
-import { deploymentFor, type Deployment } from "./deployments";
+import { browserDeploymentKey, deploymentFor, type Deployment } from "./deployments";
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
 import "./style.css";
@@ -825,6 +825,10 @@ async function render() {
     banner.hidden = false;
     banner.textContent = `Not deployed on ${chain().name} yet. Run scripts/deploy.mjs (or npm run chain for a local one), or switch network.`;
     el.innerHTML = "";
+    if (networkKey === "testnet" && burner) {
+      banner.textContent = "Testnet: tokens have no value. The bazaar is not on testnet yet; your browser wallet can deploy it below.";
+      viewDeploy(el);
+    }
     return;
   }
   banner.hidden = networkKey !== "mainnet" ? false : true;
@@ -855,6 +859,42 @@ async function render() {
   } catch (e) {
     el.innerHTML = `<p class="error">Could not read the chain: ${esc((e as Error).message)}</p>`;
   }
+}
+
+/** Testnet with nothing deployed: the browser wallet can deploy the seven contracts itself. */
+function viewDeploy(el: HTMLElement) {
+  el.hidden = false;
+  el.innerHTML = `
+    <h2>Open the bazaar on ${esc(chain().name)}</h2>
+    <p>Nothing is deployed here yet. Your browser wallet can deploy the seven contracts: no key leaves this page,
+      it only needs test BOT for gas (seven transactions).</p>
+    <p>Wallet <code>${me}</code> · <span id="dep-bal">…</span></p>
+    <p><button class="ghost" id="dep-faucet">Get test BOT</button> <button id="dep-go">Deploy the bazaar</button></p>
+    <pre id="dep-log" class="muted"></pre>`;
+  void pub.getBalance({ address: me! }).then((b) => ($("#dep-bal").textContent = bot(b)), () => ($("#dep-bal").textContent = "balance unknown"));
+  $("#dep-faucet").addEventListener("click", () => void getTestBot());
+  $<HTMLButtonElement>("#dep-go").addEventListener("click", async (e) => {
+    const btn = e.target as HTMLButtonElement;
+    btn.disabled = true;
+    const log = $("#dep-log");
+    try {
+      const { deployFromBrowser } = await import("./deployer");
+      const d = await deployFromBrowser(pub, walletClient!, (l) => (log.textContent += `${l}\n`));
+      const json = JSON.stringify(d, null, 2);
+      store.set(browserDeploymentKey(d.chainId), json);
+      el.innerHTML = `
+        <h2>Deployed</h2>
+        <p>The bazaar is live on ${esc(chain().name)} in this browser. To open it for everyone, copy the record below and
+          send it to be committed as <code>deployments/${d.chainId}.json</code> (it holds only public addresses).</p>
+        <p><button id="dep-copy">Copy deployment record</button> <button class="ghost" id="dep-open">Open the bazaar</button></p>
+        <pre>${esc(json)}</pre>`;
+      $("#dep-copy").addEventListener("click", () => navigator.clipboard.writeText(json).then(() => toast("Deployment record copied"), () => toast("Could not reach the clipboard", true)));
+      $("#dep-open").addEventListener("click", () => ((dep = d), (location.hash = "bazaar"), void render()));
+    } catch (err) {
+      log.textContent += `Stopped: ${(err as { shortMessage?: string }).shortMessage || (err as Error).message}\n`;
+      btn.disabled = false;
+    }
+  });
 }
 
 async function selectNetwork(key: Key) {

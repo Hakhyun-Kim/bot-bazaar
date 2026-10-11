@@ -7,7 +7,15 @@ export interface Deployment {
 
 const files = import.meta.glob<Deployment>("../../deployments/[0-9]*.json", { eager: true, import: "default" });
 
+/** A committed file wins; otherwise a set this browser deployed itself (src/deployer.ts), until it is committed. */
 export function deploymentFor(chainId: number): Deployment | null {
   for (const d of Object.values(files)) if (d.chainId === chainId) return d;
-  return null;
+  try {
+    const own = localStorage.getItem(browserDeploymentKey(chainId));
+    return own ? (JSON.parse(own) as Deployment) : null;
+  } catch {
+    return null;
+  }
 }
+
+export const browserDeploymentKey = (chainId: number) => `bazaar-deployment-${chainId}`;
