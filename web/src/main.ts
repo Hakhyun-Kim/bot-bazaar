@@ -12,6 +12,7 @@ import {
   type PublicClient,
   type WalletClient,
 } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import abiJson from "./abi.json";
 import type { DemoChain } from "./demo";
 import type { Target, WorldApi, WorldData } from "./world/World";
@@ -66,6 +67,11 @@ let pub: PublicClient;
 let dep: Deployment | null = null;
 let walletClient: WalletClient | null = null;
 let me: Address | null = null;
+/** On testnet the page makes its own throwaway wallet, so nobody needs an extension to play. */
+let burner = false;
+let balance: bigint | null = null;
+const LOW = parseEther("0.01");
+const burnerKeyName = (id: number) => `bazaar-burner-${id}`;
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const esc = (s: unknown) =>
@@ -93,9 +99,11 @@ let queue: Promise<unknown> = Promise.resolve();
 function queueTx(label: string, name: Name, functionName: string, args: unknown[] = [], value?: bigint) {
   const run = async () => {
     if (!walletClient || !me) throw new Error("Connect a wallet first");
-    toast(`${label}: ${demo ? "sending" : "confirm in your wallet"}…`);
+    toast(`${label}: ${demo || burner ? "sending" : "confirm in your wallet"}…`);
     const { request } = await pub.simulateContract({ ...c(name), functionName, args, value, account: me } as never);
-    const hash = await walletClient.writeContract(request as never);
+    // A local (burner) account signs in the page; the simulated request only carries its address.
+    const account = walletClient.account ?? (request as { account: unknown }).account;
+    const hash = await walletClient.writeContract({ ...(request as object), account } as never);
     toast(`${label}: sent, waiting for the block…`);
     const r = await pub.waitForTransactionReceipt({ hash });
     if (r.status !== "success") throw new Error(`${label} reverted`);
@@ -140,8 +148,110 @@ async function connect() {
   }
   walletClient = createWalletClient({ chain: ch, transport: custom(eth) });
   [me] = await walletClient.requestAddresses();
-  $("#connect").textContent = short(me);
-  render();
+  burner = false;
+  if (networkKey === "testnet") store.set("bazaar-wallet", "extension");
+  $("#wallet").hidden = true;
+  void render();
+}
+
+// ---------- browser (burner) wallet, testnet only ----------
+/** Make or reuse this browser's testnet key. Valueless by design: it lives in localStorage. */
+function useBurner() {
+  const ch = chain();
+  let key = store.get(burnerKeyName(ch.id)) as `0x${string}` | null;
+  if (!key) {
+    key = generatePrivateKey();
+    store.set(burnerKeyName(ch.id), key);
+  }
+  const account = privateKeyToAccount(key);
+  walletClient = createWalletClient({ account, chain: ch, transport: http() });
+  me = account.address;
+  burner = true;
+}
+
+/** The faucet has a captcha, so "get BOT" copies the address and opens the faucet page for one paste. */
+async function getTestBot() {
+  if (!me) return;
+  const tab = open(FAUCET, "_blank", "noopener"); // first, while the click still counts as a user gesture
+  try {
+    await navigator.clipboard.writeText(me);
+    toast("Address copied. Paste it on the faucet page.");
+  } catch {
+    toast(`Paste this address on the faucet page: ${me}`);
+  }
+  if (!tab) toast(`Open ${FAUCET} to get test BOT`, true);
+}
+
+/** Move some BOT from an extension wallet (MetaMask…) into the browser wallet. */
+async function fundFromExtension() {
+  const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
+  if (!eth || !me) return toast("No browser extension wallet found", true);
+  const amount = prompt("How much test BOT to send to the browser wallet?", "0.1");
+  if (!amount) return;
+  try {
+    const ch = chain();
+    const ext = createWalletClient({ chain: ch, transport: custom(eth) });
+    const [from] = await ext.requestAddresses();
+    await ext.switchChain({ id: ch.id }).catch(() => undefined);
+    const hash = await ext.sendTransaction({ account: from, to: me, value: parseEther(amount), chain: ch });
+    toast("Sent, waiting for the block…");
+    await pub.waitForTransactionReceipt({ hash });
+    toast("Browser wallet funded");
+    void render();
+  } catch (e) {
+    toast((e as { shortMessage?: string }).shortMessage || (e as Error).message, true);
+  }
+}
+
+async function copyKey() {
+  const key = store.get(burnerKeyName(chain().id));
+  if (!key) return;
+  if (!confirm("Copy this browser wallet's private key? Anyone with it controls the wallet. Use it on testnet only.")) return;
+  try {
+    await navigator.clipboard.writeText(key);
+    toast("Private key copied. Keep it out of chats and commits.");
+  } catch {
+    toast("Could not reach the clipboard", true);
+  }
+}
+
+function renderWallet() {
+  const btn = $("#connect");
+  btn.hidden = networkKey === "demo";
+  btn.textContent = me ? `${burner ? "👛 " : ""}${short(me)}${balance !== null ? ` · ${Number(formatEther(balance)).toFixed(3)}` : ""}` : "Connect wallet";
+  const low = balance !== null && balance < LOW;
+  const lowNote = document.querySelector<HTMLElement>("#low");
+  if (lowNote) lowNote.hidden = !low;
+  const box = $("#wallet");
+  if (box.hidden || !me) return;
+  box.innerHTML = `
+    <h3>${burner ? "Browser wallet" : "Extension wallet"} <small class="muted">${esc(chain().name)}</small></h3>
+    <p class="addr"><code>${me}</code> <button class="ghost" data-w="copy">Copy</button></p>
+    <p>Balance <b>${balance === null ? "…" : bot(balance)}</b>${low ? ` <span class="warn">low</span>` : ""}</p>
+    ${networkKey === "testnet" ? `<p><button data-w="faucet">Get test BOT</button> <span class="muted">copies your address and opens the faucet</span></p>` : ""}
+    ${burner ? `
+      <p><button class="ghost" data-w="fund">Send from MetaMask…</button></p>
+      <p><button class="ghost" data-w="key">Copy private key</button> <span class="muted">testnet only · import it elsewhere or use it as a deploy key</span></p>
+      <p><button class="ghost" data-w="ext">Use MetaMask instead</button></p>`
+    : networkKey === "testnet" ? `<p><button class="ghost" data-w="burner">Use the browser wallet</button></p>` : ""}`;
+  box.querySelectorAll<HTMLButtonElement>("[data-w]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const w = b.dataset.w;
+      if (w === "copy") await navigator.clipboard.writeText(me!).then(() => toast("Address copied"), () => toast(me!));
+      if (w === "faucet") await getTestBot();
+      if (w === "fund") await fundFromExtension();
+      if (w === "key") await copyKey();
+      if (w === "ext") await connect();
+      if (w === "burner") (useBurner(), store.set("bazaar-wallet", "burner"), void render());
+    }));
+}
+
+// After a trip to the faucet the balance shows up on its own when the page is looked at again.
+addEventListener("focus", () => void refreshBalance());
+
+async function refreshBalance() {
+  balance = me && networkKey !== "demo" ? await pub.getBalance({ address: me }).catch(() => null) : null;
+  renderWallet();
 }
 
 // ---------- who is who ----------
@@ -361,7 +471,7 @@ async function viewAccount(el: HTMLElement) {
   const self = (await whoIs([me])).get(me)!;
   const now = nowSec();
   el.innerHTML = `
-    <h2>Account <small>${short(me)} · ${bot(balance)}${networkKey === "testnet" ? ` · <a href="${FAUCET}" target="_blank" rel="noopener">faucet</a>` : ""}</small></h2>
+    <h2>Account <small>${short(me)} · ${bot(balance)}${networkKey === "testnet" ? ` · <button class="ghost" id="acct-faucet">Get test BOT</button>` : ""}</small></h2>
     <h3>What are you? <small>${badge(self)}</small></h3>
     <p class="muted">Optional and changes nothing you can do. Leave it undeclared to play Bot or Not.</p>
     <form id="declare"><select name="kind">${KINDS.slice(1).map((k, i) => `<option value="${i + 1}"${self.kind === i + 1 ? " selected" : ""}>${k.icon} ${k.name}</option>`).join("")}</select>
@@ -392,6 +502,7 @@ async function viewAccount(el: HTMLElement) {
       <textarea name="items" rows="4" placeholder="One item per line: name, price in BOT">${shop.items.map((it) => `${esc(it.name)}, ${formatEther(it.price)}`).join("\n")}</textarea>
       <div><button>${shop.open ? "Update" : "Open"} shop</button>${shop.open ? ` <button type="button" class="ghost" id="close-shop">Close shop</button>` : ""}</div>
     </form>`;
+  el.querySelector("#acct-faucet")?.addEventListener("click", () => void getTestBot());
   el.querySelectorAll<HTMLButtonElement>("[data-act]").forEach((b) =>
     b.addEventListener("click", () => {
       const [fn, id] = b.dataset.act!.split(":");
@@ -722,7 +833,11 @@ async function render() {
     $("#reset").addEventListener("click", () => {
       if (confirm("Start the demo over? Your demo shops, purchases and rounds are cleared.")) demo!.reset(), location.reload();
     });
-  } else banner.textContent = networkKey === "testnet" ? "Testnet: tokens have no value." : "Local chain.";
+  } else if (networkKey === "testnet") {
+    banner.innerHTML = `Testnet: tokens have no value.<span id="low" hidden> <span class="long">Your wallet needs test BOT for gas.</span> <button id="faucet">Get test BOT</button></span>`;
+    $("#faucet").addEventListener("click", () => void getTestBot());
+    await refreshBalance();
+  } else banner.textContent = "Local chain.";
   fitStage();
   if (tab === "bazaar") {
     try {
@@ -745,8 +860,10 @@ async function selectNetwork(key: Key) {
   walletClient = null;
   me = null;
   demo = null;
-  $("#connect").textContent = "Connect wallet";
-  $("#connect").hidden = key === "demo";
+  burner = false;
+  balance = null;
+  $("#wallet").hidden = true;
+  renderWallet();
   $("#persona").hidden = key !== "demo";
   if (key === "demo") {
     $("#view").innerHTML = "<p class='muted'>Starting the demo chain in your browser…</p>";
@@ -766,6 +883,8 @@ async function selectNetwork(key: Key) {
   const ch = chain();
   pub = createPublicClient({ chain: ch, transport: http() }) as PublicClient;
   dep = deploymentFor(ch.id);
+  if (key === "testnet" && store.get("bazaar-wallet") !== "extension") useBurner();
+  renderWallet();
   void render();
 }
 
@@ -780,7 +899,11 @@ $<HTMLSelectElement>("#persona").addEventListener("change", (e) => {
   store.set("bazaar-demo-persona", me);
   void render();
 });
-$("#connect").addEventListener("click", () => void connect());
+$("#connect").addEventListener("click", () => {
+  if (!me) return void connect();
+  $("#wallet").hidden = !$("#wallet").hidden;
+  void refreshBalance();
+});
 $("#panel-close").addEventListener("click", () => {
   panel = null;
   void renderPanel();

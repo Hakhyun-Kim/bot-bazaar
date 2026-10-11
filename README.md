@@ -261,6 +261,12 @@ An optional arbitration contract that a project can appoint for its own district
 Testnet BOT: https://faucet.botchain.ai · Developer guide:
 https://dev-docs.botchain.ai/docs/Developers/quick-guide/
 
+On testnet the web client makes a browser wallet for you (a throwaway key in localStorage, like a
+burner). The wallet button shows its address and balance; *Get test BOT* copies the address and
+opens the faucet, and the banner asks again whenever the balance is too low for gas. *Copy private
+key* exports it (testnet only), *Send from MetaMask…* tops it up from an extension wallet, and
+*Use MetaMask instead* switches back. Mainnet always uses your own wallet.
+
 These values live in one table, [`scripts/lib/networks.mjs`](scripts/lib/networks.mjs), mirrored
 in [`web/src/networks.ts`](web/src/networks.ts); `npm test` fails if the two disagree. Deployed
 addresses are written to `deployments/<chainId>.json` and picked up by the web client
@@ -320,7 +326,7 @@ DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --yes
 ```
 
 Testnet can also be deployed from GitHub: add a repository secret `DEPLOYER_KEY` (a testnet-only
-wallet funded from the faucet), then run the **deploy-testnet** workflow, first as a dry run and
+wallet funded from the faucet, for example the browser wallet above via *Copy private key*), then run the **deploy-testnet** workflow, first as a dry run and
 then with *broadcast* ticked. It commits `deployments/968.json` and rebuilds the Pages site, which
 then opens on testnet with a browser wallet; the in-browser demo stays in the network menu.
 
