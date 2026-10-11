@@ -1487,6 +1487,653 @@
    "type": "function"
   }
  ],
+ "BazaarRequests": [
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "worker",
+     "type": "address"
+    }
+   ],
+   "name": "Assigned",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "Disputed",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "worker",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "reward",
+     "type": "uint256"
+    }
+   ],
+   "name": "Paid",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "worker",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "note",
+     "type": "string"
+    }
+   ],
+   "name": "Pitched",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "poster",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint8",
+     "name": "wants",
+     "type": "uint8"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "reward",
+     "type": "uint256"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "title",
+     "type": "string"
+    }
+   ],
+   "name": "Posted",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "poster",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "reward",
+     "type": "uint256"
+    }
+   ],
+   "name": "Returned",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "worker",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "resultURI",
+     "type": "string"
+    }
+   ],
+   "name": "Submitted",
+   "type": "event"
+  },
+  {
+   "inputs": [],
+   "name": "ASSIGNED",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "DISPUTE_REVIEW",
+   "outputs": [
+    {
+     "internalType": "uint64",
+     "name": "",
+     "type": "uint64"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "OPEN",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "PAID",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "RETURNED",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "REVIEW",
+   "outputs": [
+    {
+     "internalType": "uint64",
+     "name": "",
+     "type": "uint64"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "SUBMITTED",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "WANTS_ANYONE",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "WANTS_BOTS",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "WANTS_HUMANS",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "accept",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "address payable",
+     "name": "worker",
+     "type": "address"
+    }
+   ],
+   "name": "assign",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "cancel",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "dispute",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "handBack",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "offset",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "limit",
+     "type": "uint256"
+    }
+   ],
+   "name": "openRequests",
+   "outputs": [
+    {
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    },
+    {
+     "components": [
+      {
+       "internalType": "address payable",
+       "name": "poster",
+       "type": "address"
+      },
+      {
+       "internalType": "address payable",
+       "name": "worker",
+       "type": "address"
+      },
+      {
+       "internalType": "uint128",
+       "name": "reward",
+       "type": "uint128"
+      },
+      {
+       "internalType": "uint64",
+       "name": "deadline",
+       "type": "uint64"
+      },
+      {
+       "internalType": "uint64",
+       "name": "releaseAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "uint8",
+       "name": "wants",
+       "type": "uint8"
+      },
+      {
+       "internalType": "uint8",
+       "name": "state",
+       "type": "uint8"
+      },
+      {
+       "internalType": "bool",
+       "name": "disputed",
+       "type": "bool"
+      },
+      {
+       "internalType": "string",
+       "name": "title",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "detailsURI",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "resultURI",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct BazaarRequests.Request[]",
+     "name": "list",
+     "type": "tuple[]"
+    },
+    {
+     "internalType": "uint256",
+     "name": "total",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "string",
+     "name": "note",
+     "type": "string"
+    }
+   ],
+   "name": "pitch",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "string",
+     "name": "title",
+     "type": "string"
+    },
+    {
+     "internalType": "string",
+     "name": "detailsURI",
+     "type": "string"
+    },
+    {
+     "internalType": "uint8",
+     "name": "wants",
+     "type": "uint8"
+    },
+    {
+     "internalType": "uint64",
+     "name": "deadline",
+     "type": "uint64"
+    }
+   ],
+   "name": "post",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "payable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "reclaim",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "release",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "requestAt",
+   "outputs": [
+    {
+     "components": [
+      {
+       "internalType": "address payable",
+       "name": "poster",
+       "type": "address"
+      },
+      {
+       "internalType": "address payable",
+       "name": "worker",
+       "type": "address"
+      },
+      {
+       "internalType": "uint128",
+       "name": "reward",
+       "type": "uint128"
+      },
+      {
+       "internalType": "uint64",
+       "name": "deadline",
+       "type": "uint64"
+      },
+      {
+       "internalType": "uint64",
+       "name": "releaseAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "uint8",
+       "name": "wants",
+       "type": "uint8"
+      },
+      {
+       "internalType": "uint8",
+       "name": "state",
+       "type": "uint8"
+      },
+      {
+       "internalType": "bool",
+       "name": "disputed",
+       "type": "bool"
+      },
+      {
+       "internalType": "string",
+       "name": "title",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "detailsURI",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "resultURI",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct BazaarRequests.Request",
+     "name": "",
+     "type": "tuple"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "requestCount",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "string",
+     "name": "resultURI",
+     "type": "string"
+    }
+   ],
+   "name": "submit",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  }
+ ],
  "BazaarProjects": [
   {
    "anonymous": false,
@@ -1832,6 +2479,31 @@
     {
      "indexed": true,
      "internalType": "address",
+     "name": "who",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint8",
+     "name": "kind",
+     "type": "uint8"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "label",
+     "type": "string"
+    }
+   ],
+   "name": "Declared",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
      "name": "agent",
      "type": "address"
     },
@@ -1866,6 +2538,45 @@
   },
   {
    "inputs": [],
+   "name": "KIND_BOT",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "KIND_HUMAN",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "KIND_TEAM",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
    "name": "LINK_TYPEHASH",
    "outputs": [
     {
@@ -1875,6 +2586,24 @@
     }
    ],
    "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint8",
+     "name": "kind",
+     "type": "uint8"
+    },
+    {
+     "internalType": "string",
+     "name": "label",
+     "type": "string"
+    }
+   ],
+   "name": "declare",
+   "outputs": [],
+   "stateMutability": "nonpayable",
    "type": "function"
   },
   {
@@ -1904,6 +2633,44 @@
      "internalType": "address",
      "name": "",
      "type": "address"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "name": "kindOf",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "name": "labelOf",
+   "outputs": [
+    {
+     "internalType": "string",
+     "name": "",
+     "type": "string"
     }
    ],
    "stateMutability": "view",
@@ -2032,6 +2799,515 @@
    "name": "unlink",
    "outputs": [],
    "stateMutability": "nonpayable",
+   "type": "function"
+  }
+ ],
+ "BotOrNot": [
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "pass_",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "constructor"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    }
+   ],
+   "name": "Entered",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    }
+   ],
+   "name": "Forfeited",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "guesser",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "bool",
+     "name": "bot",
+     "type": "bool"
+    }
+   ],
+   "name": "Guessed",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "guesser",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    }
+   ],
+   "name": "PointClaimed",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    },
+    {
+     "indexed": false,
+     "internalType": "bool",
+     "name": "wasBot",
+     "type": "bool"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint32",
+     "name": "fooled",
+     "type": "uint32"
+    }
+   ],
+   "name": "Revealed",
+   "type": "event"
+  },
+  {
+   "inputs": [],
+   "name": "MAX_ROUND",
+   "outputs": [
+    {
+     "internalType": "uint64",
+     "name": "",
+     "type": "uint64"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "MIN_ROUND",
+   "outputs": [
+    {
+     "internalType": "uint64",
+     "name": "",
+     "type": "uint64"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    }
+   ],
+   "name": "claim",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "internalType": "bool",
+     "name": "isBot",
+     "type": "bool"
+    },
+    {
+     "internalType": "bytes32",
+     "name": "salt",
+     "type": "bytes32"
+    }
+   ],
+   "name": "commitmentOf",
+   "outputs": [
+    {
+     "internalType": "bytes32",
+     "name": "",
+     "type": "bytes32"
+    }
+   ],
+   "stateMutability": "pure",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "bytes32",
+     "name": "commitment",
+     "type": "bytes32"
+    }
+   ],
+   "name": "enter",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    }
+   ],
+   "name": "forfeit",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "internalType": "bool",
+     "name": "bot",
+     "type": "bool"
+    }
+   ],
+   "name": "guess",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "pass",
+   "outputs": [
+    {
+     "internalType": "contract IAgentPassKind",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "playerCount",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "offset",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "limit",
+     "type": "uint256"
+    }
+   ],
+   "name": "players",
+   "outputs": [
+    {
+     "internalType": "address[]",
+     "name": "who",
+     "type": "address[]"
+    },
+    {
+     "components": [
+      {
+       "internalType": "uint32",
+       "name": "guesses",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint32",
+       "name": "correct",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint32",
+       "name": "rounds",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint32",
+       "name": "fooled",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint32",
+       "name": "forfeits",
+       "type": "uint32"
+      }
+     ],
+     "internalType": "struct BotOrNot.Score[]",
+     "name": "scores",
+     "type": "tuple[]"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "bool",
+     "name": "wasBot",
+     "type": "bool"
+    },
+    {
+     "internalType": "bytes32",
+     "name": "salt",
+     "type": "bytes32"
+    }
+   ],
+   "name": "reveal",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    }
+   ],
+   "name": "roundCount",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    }
+   ],
+   "name": "roundOf",
+   "outputs": [
+    {
+     "components": [
+      {
+       "internalType": "bytes32",
+       "name": "commitment",
+       "type": "bytes32"
+      },
+      {
+       "internalType": "uint64",
+       "name": "startedAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "uint32",
+       "name": "humanVotes",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint32",
+       "name": "botVotes",
+       "type": "uint32"
+      },
+      {
+       "internalType": "bool",
+       "name": "closed",
+       "type": "bool"
+      },
+      {
+       "internalType": "bool",
+       "name": "revealed",
+       "type": "bool"
+      },
+      {
+       "internalType": "bool",
+       "name": "wasBot",
+       "type": "bool"
+      }
+     ],
+     "internalType": "struct BotOrNot.Round",
+     "name": "",
+     "type": "tuple"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "name": "scoreOf",
+   "outputs": [
+    {
+     "internalType": "uint32",
+     "name": "guesses",
+     "type": "uint32"
+    },
+    {
+     "internalType": "uint32",
+     "name": "correct",
+     "type": "uint32"
+    },
+    {
+     "internalType": "uint32",
+     "name": "rounds",
+     "type": "uint32"
+    },
+    {
+     "internalType": "uint32",
+     "name": "fooled",
+     "type": "uint32"
+    },
+    {
+     "internalType": "uint32",
+     "name": "forfeits",
+     "type": "uint32"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "trader",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "round",
+     "type": "uint256"
+    },
+    {
+     "internalType": "address",
+     "name": "guesser",
+     "type": "address"
+    }
+   ],
+   "name": "voteOf",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
    "type": "function"
   }
  ],

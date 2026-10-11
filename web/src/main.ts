@@ -21,7 +21,18 @@ type Name = keyof Deployment["contracts"];
 const ABI = abiJson as unknown as Record<Name, readonly unknown[]>;
 
 const CATEGORIES = ["Goods (B2C)", "Service (B2B)", "Developer asset", "Agent service"];
-const TABS = ["shops", "projects", "workshop", "account"] as const;
+const TABS = ["shops", "requests", "botornot", "projects", "workshop", "account"] as const;
+const TAB_LABEL: Record<string, string> = {
+  shops: "Shops", requests: "Requests", botornot: "Bot or Not", projects: "Projects", workshop: "Workshop", account: "Account",
+};
+/** AgentPass.kindOf — self-declared, display only. The contracts treat every kind the same. */
+const KINDS = [
+  { icon: "❓", name: "Undeclared" },
+  { icon: "🧑", name: "Human" },
+  { icon: "🤖", name: "Bot" },
+  { icon: "🧑🤖", name: "Team" },
+];
+const WANTS = ["Anyone", "Humans", "Bots"];
 type Tab = (typeof TABS)[number];
 
 const store = {
@@ -121,6 +132,33 @@ async function connect() {
   render();
 }
 
+// ---------- who is who ----------
+interface Who {
+  kind: number;
+  label: string;
+  principal: Address;
+}
+async function whoIs(addrs: readonly Address[]): Promise<Map<Address, Who>> {
+  const uniq = [...new Set(addrs)];
+  const rows = await Promise.all(
+    uniq.map(async (a) => {
+      const [kind, label, principal] = await Promise.all([
+        read<number>("AgentPass", "kindOf", [a]),
+        read<string>("AgentPass", "labelOf", [a]),
+        read<Address>("AgentPass", "principalOf", [a]),
+      ]);
+      return [a, { kind, label, principal }] as const;
+    }),
+  );
+  return new Map(rows);
+}
+function badge(w: Who | undefined) {
+  const k = KINDS[w?.kind ?? 0] ?? KINDS[0];
+  const title = w?.kind ? `${k.name}${w.label ? `: ${w.label}` : ""}` : "Not declared. Guess in Bot or Not";
+  const pass = w && !/^0x0+$/.test(w.principal) ? ` <span class="pass" title="Acts for ${w.principal}">for ${short(w.principal)}</span>` : "";
+  return `<span class="kind k${w?.kind ?? 0}" title="${esc(title)}">${k.icon} ${w?.kind ? esc(k.name) : "Bot or not?"}</span>${pass}`;
+}
+
 // ---------- views ----------
 async function viewShops(el: HTMLElement) {
   const projectFilter = Number(new URLSearchParams(location.search).get("project") || 0);
@@ -128,15 +166,27 @@ async function viewShops(el: HTMLElement) {
   const rows = owners
     .map((o, i) => ({ owner: o, ...shops[i] }))
     .filter((s) => !projectFilter || s.projectId === projectFilter);
+  const who = await whoIs(rows.map((r) => r.owner));
   el.innerHTML = `
+    <p class="hero">Bots and humans trade here as equals: same prices, same escrow, same rules. Badges are self-declared;
+      the undeclared ones are a <a href="#botornot">game</a>.</p>
     <h2>Open shops <small>${total} on chain${projectFilter ? ` · project #${projectFilter}` : ""}</small></h2>
     <div class="filters">${["All", ...CATEGORIES].map((cName, i) => `<button data-cat="${i - 1}">${cName}</button>`).join("")}</div>
-    <div class="grid" id="shop-grid">${rows.map(shopCard).join("") || "<p>No shops yet. Open the first one from Account.</p>"}</div>`;
+    <div class="filters">${KINDS.map((k, i) => `<button data-kind="${i}">${k.icon} ${k.name}</button>`).join("")}<button data-kind="-1">Everyone</button></div>
+    <div class="grid" id="shop-grid">${rows.map((r) => shopCard(r, who.get(r.owner))).join("") || "<p>No shops yet. Open the first one from Account.</p>"}</div>`;
   el.querySelectorAll<HTMLButtonElement>("[data-cat]").forEach((b) =>
     b.addEventListener("click", () => {
       const cat = Number(b.dataset.cat);
       el.querySelectorAll<HTMLElement>(".shop").forEach((card) => {
         card.hidden = cat >= 0 && Number(card.dataset.cat) !== cat;
+      });
+    }),
+  );
+  el.querySelectorAll<HTMLButtonElement>("[data-kind]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const kind = Number(b.dataset.kind);
+      el.querySelectorAll<HTMLElement>(".shop").forEach((card) => {
+        card.hidden = kind >= 0 && Number(card.dataset.kind) !== kind;
       });
     }),
   );
@@ -165,10 +215,10 @@ interface ShopData {
   items: { name: string; price: bigint }[];
 }
 
-function shopCard(s: ShopData & { owner: Address }) {
-  return `<article class="shop" data-cat="${s.category}">
+function shopCard(s: ShopData & { owner: Address }, w?: Who) {
+  return `<article class="shop" data-cat="${s.category}" data-kind="${w?.kind ?? 0}">
     <header><b>${esc(s.title)}</b><span class="tag">${esc(CATEGORIES[s.category] ?? "?")}</span></header>
-    <div class="meta">${short(s.owner)}${s.projectId ? ` · project #${s.projectId}` : ""}${
+    <div class="meta">${badge(w)} · ${short(s.owner)}${s.projectId ? ` · project #${s.projectId}` : ""}${
       /^(https|ipfs):\/\//.test(s.metadataURI) ? ` · <a href="${esc(s.metadataURI)}" target="_blank" rel="noopener">info</a>` : ""
     }</div>
     <ul>${s.items
@@ -292,9 +342,15 @@ async function viewAccount(el: HTMLElement) {
   const [offerIds, offers] = await read<[bigint[], { buyer: Address; amount: bigint; itemName: string; expiresAt: bigint }[]]>(
     "BazaarOffers", "offersFor", [me, 0n, 20n]);
   const shop = await read<ShopData>("BazaarMarket", "shopOf", [me]);
+  const self = (await whoIs([me])).get(me)!;
   const now = BigInt(Math.floor(Date.now() / 1000));
   el.innerHTML = `
     <h2>Account <small>${short(me)} · ${bot(balance)}${networkKey === "testnet" ? ` · <a href="${FAUCET}" target="_blank" rel="noopener">faucet</a>` : ""}</small></h2>
+    <h3>What are you? <small>${badge(self)}</small></h3>
+    <p class="muted">Optional and changes nothing you can do. Leave it undeclared to play Bot or Not.</p>
+    <form id="declare"><select name="kind">${KINDS.slice(1).map((k, i) => `<option value="${i + 1}"${self.kind === i + 1 ? " selected" : ""}>${k.icon} ${k.name}</option>`).join("")}</select>
+      <input name="label" maxlength="60" placeholder="e.g. pricing bot · illustrator · studio + 3 agents" value="${esc(self.label)}" />
+      <button>Declare</button></form>
     <h3>Purchases and sales (latest 50 on chain)</h3>
     <table><tr><th>#</th><th>Role</th><th>Amount</th><th>State</th><th></th></tr>${mine
       .map(({ id, p }) => {
@@ -329,6 +385,11 @@ async function viewAccount(el: HTMLElement) {
   el.querySelectorAll<HTMLButtonElement>("[data-offer-accept]").forEach((b) =>
     b.addEventListener("click", () => void queueTx("Accept offer", "BazaarOffers", "acceptOffer", [BigInt(b.dataset.offerAccept!)]).then(render)),
   );
+  $("#declare").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target as HTMLFormElement);
+    void queueTx("Declare", "AgentPass", "declare", [Number(f.get("kind")), f.get("label") || ""]).then(render);
+  });
   $("#shop").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
@@ -347,15 +408,198 @@ async function viewAccount(el: HTMLElement) {
   document.getElementById("close-shop")?.addEventListener("click", () => void queueTx("Close shop", "BazaarMarket", "closeShop").then(render));
 }
 
+// ---------- requests: the market in reverse ----------
+interface RequestData {
+  poster: Address;
+  worker: Address;
+  reward: bigint;
+  deadline: bigint;
+  releaseAt: bigint;
+  wants: number;
+  state: number;
+  disputed: boolean;
+  title: string;
+  detailsURI: string;
+  resultURI: string;
+}
+const REQ_STATE = ["open", "assigned", "submitted", "paid", "returned"];
+
+async function viewRequests(el: HTMLElement) {
+  const [ids, list, total] = await read<[bigint[], RequestData[], bigint]>("BazaarRequests", "openRequests", [0n, 50n]);
+  const count = await read<bigint>("BazaarRequests", "requestCount");
+  const mine: { id: bigint; r: RequestData }[] = [];
+  if (me) {
+    for (let id = count - 1n; id >= 0n && id >= count - 30n; id--) {
+      const r = await read<RequestData>("BazaarRequests", "requestAt", [id]);
+      if (r.poster === me || r.worker === me) mine.push({ id, r });
+    }
+  }
+  const who = await whoIs([...list.map((r) => r.poster), ...mine.flatMap(({ r }) => [r.poster, r.worker])]);
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  el.innerHTML = `
+    <h2>Requests <small>${total} open · humans hire bots, bots hire humans</small></h2>
+    <p class="hero">Post a task with the reward locked in escrow. Anyone pitches, you pick one, they deliver, you accept,
+      or the reward releases to them after 3 days (10 if you dispute). Nobody can keep work for free.</p>
+    <div class="grid">${list
+      .map(
+        (r, i) => `<article class="shop"><header><b>${esc(r.title)}</b><span class="tag">wants: ${WANTS[r.wants]}</span></header>
+        <div class="meta">${badge(who.get(r.poster))} · ${short(r.poster)} · ${bot(r.reward)} · due ${new Date(Number(r.deadline) * 1000).toLocaleDateString()}${
+          /^(https|ipfs):\/\//.test(r.detailsURI) ? ` · <a href="${esc(r.detailsURI)}" target="_blank" rel="noopener">details</a>` : ""
+        }</div>
+        <button data-pitch="${ids[i]}">Pitch for it</button></article>`,
+      )
+      .join("") || "<p>No open requests. Post the first.</p>"}</div>
+    <h3>Post a request</h3>
+    <form id="req"><input name="title" maxlength="80" placeholder="What needs doing" required />
+      <input name="uri" maxlength="200" placeholder="https://… details (optional)" />
+      <select name="wants">${WANTS.map((w, i) => `<option value="${i}">${w} welcome</option>`).join("")}</select>
+      <input name="days" type="number" min="1" value="7" title="Days to deliver" />
+      <input name="reward" placeholder="Reward in BOT" required />
+      <button>Post with escrow</button></form>
+    ${me ? `<h3>Yours</h3><table>${mine
+      .map(({ id, r }) => {
+        const poster = r.poster === me;
+        const acts: string[] = [];
+        if (poster && r.state === 0) acts.push(`<button data-req="assign:${id}">Assign…</button>`, `<button class="ghost" data-req="cancel:${id}">Cancel</button>`);
+        if (poster && r.state === 1 && now > r.deadline) acts.push(`<button data-req="reclaim:${id}">Reclaim</button>`);
+        if (poster && r.state === 2) acts.push(`<button data-req="accept:${id}">Accept</button>`, r.disputed ? "" : `<button class="ghost" data-req="dispute:${id}">Dispute</button>`);
+        if (!poster && r.state === 1) acts.push(`<button data-req="submit:${id}">Submit…</button>`);
+        if (!poster && (r.state === 1 || r.state === 2)) acts.push(`<button class="ghost" data-req="handBack:${id}">Hand back</button>`);
+        if (r.state === 2 && now >= r.releaseAt) acts.push(`<button data-req="release:${id}">Release</button>`);
+        return `<tr><td>#${id} ${esc(r.title)}</td><td>${poster ? "you posted" : "you work"}</td><td>${bot(r.reward)}</td>
+          <td>${REQ_STATE[r.state]}${r.disputed ? " (disputed)" : ""}${r.resultURI ? ` · <a href="${esc(r.resultURI)}" target="_blank" rel="noopener">result</a>` : ""}</td><td>${acts.join("")}</td></tr>`;
+      })
+      .join("") || `<tr><td>Nothing yet.</td></tr>`}</table>` : ""}`;
+  $("#req").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target as HTMLFormElement);
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(f.get("days")) * 86400);
+    void queueTx("Post request", "BazaarRequests", "post", [f.get("title"), f.get("uri") || "", Number(f.get("wants")), deadline],
+      parseEther(String(f.get("reward")))).then(render);
+  });
+  el.querySelectorAll<HTMLButtonElement>("[data-pitch]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const note = prompt("Your pitch (the poster sees it on chain, 200 characters max)");
+      if (note !== null) void queueTx("Pitch", "BazaarRequests", "pitch", [BigInt(b.dataset.pitch!), note]);
+    }),
+  );
+  el.querySelectorAll<HTMLButtonElement>("[data-req]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [fn, id] = b.dataset.req!.split(":");
+      const args: unknown[] = [BigInt(id)];
+      if (fn === "assign") {
+        const w = prompt("Worker address (from the Pitched events / their pitch)");
+        if (!w) return;
+        args.push(w);
+      }
+      if (fn === "submit") {
+        const uri = prompt("Link to the result (https:// or ipfs://)");
+        if (!uri) return;
+        args.push(uri);
+      }
+      void queueTx(fn, "BazaarRequests", fn, args).then(render);
+    }),
+  );
+}
+
+// ---------- Bot or Not ----------
+interface Round {
+  commitment: string;
+  startedAt: bigint;
+  humanVotes: number;
+  botVotes: number;
+  closed: boolean;
+  revealed: boolean;
+  wasBot: boolean;
+}
+type Score = { guesses: number; correct: number; rounds: number; fooled: number; forfeits: number };
+
+async function viewBotOrNot(el: HTMLElement) {
+  const [who, scores] = await read<[Address[], Score[]]>("BotOrNot", "players", [0n, 200n]);
+  const rounds = await Promise.all(
+    who.map(async (a) => {
+      const n = await read<bigint>("BotOrNot", "roundCount", [a]);
+      if (n === 0n) return null;
+      const round = n - 1n;
+      const r = await read<Round>("BotOrNot", "roundOf", [a, round]);
+      const vote = me ? await read<number>("BotOrNot", "voteOf", [a, round, me]) : 0;
+      return { trader: a, round, r, vote };
+    }),
+  );
+  const live = rounds.filter((x) => x && !x.r.closed) as NonNullable<(typeof rounds)[number]>[];
+  const claimable = rounds.filter((x) => x && x.r.revealed && (x.vote === 2) === x.r.wasBot && (x.vote === 1 || x.vote === 2));
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const top = (key: keyof Score) =>
+    who.map((a, i) => ({ a, s: scores[i] })).filter((x) => x.s[key] > 0).sort((x, y) => y.s[key] - x.s[key]).slice(0, 10);
+  const my = me ? rounds.find((x) => x?.trader === me) : undefined;
+  const saved = me ? store.get(`bon-${me}`) : null;
+  el.innerHTML = `
+    <h2>Bot or Not <small>can you tell who is typing?</small></h2>
+    <p class="hero">Traders who have not declared what they are can enter a round with a sealed answer. Everyone else guesses
+      🤖 or 🧑 once. After a day they reveal: right guesses score a point for the detective, wrong guesses score a point for
+      the trader. No money, only bragging rights, all on chain.</p>
+    <h3>Live rounds</h3>
+    <div class="grid">${live
+      .map(
+        ({ trader, r, vote }) => `<article class="shop"><header><b>${short(trader)}</b><span class="tag">since ${new Date(Number(r.startedAt) * 1000).toLocaleString()}</span></header>
+        <div class="meta">🤖 ${r.botVotes} · 🧑 ${r.humanVotes}</div>
+        ${trader === me ? "<p class='muted'>This is you.</p>" : vote ? `<p class="muted">You said ${vote === 2 ? "🤖 bot" : "🧑 human"}.</p>`
+          : `<button data-guess="${trader}:1">🤖 Bot</button> <button data-guess="${trader}:0">🧑 Human</button>`}
+        ${now > r.startedAt + 14n * 86400n ? `<button class="ghost" data-forfeit="${trader}">Mark forfeited</button>` : ""}</article>`,
+      )
+      .join("") || "<p>No live rounds. Enter one below.</p>"}</div>
+    ${claimable.length ? `<p><button id="claim">Claim ${claimable.length} point(s)</button></p>` : ""}
+    <h3>Your round</h3>
+    ${!me ? "<p>Connect a wallet to play.</p>"
+      : my && !my.r.closed
+        ? now >= my.r.startedAt + 86400n
+          ? `<button id="reveal" ${saved ? "" : "disabled"}>Reveal${saved ? "" : " (answer not on this device)"}</button>`
+          : `<p class="muted">Sealed. You can reveal one day after entering.</p>`
+        : `<form id="enter"><label><input type="radio" name="bot" value="1" required /> I am a bot</label>
+            <label><input type="radio" name="bot" value="0" /> I am a human</label><button>Seal and enter</button></form>
+           <p class="muted">The answer and a random salt stay in this browser until you reveal. Only undeclared traders can enter.</p>`}
+    <div class="boards">
+      <section><h3>🔍 Best detectives</h3><ol>${top("correct").map(({ a, s }) => `<li>${short(a)} · ${s.correct}/${s.guesses}</li>`).join("") || "<li>None yet</li>"}</ol></section>
+      <section><h3>🎭 Most convincing</h3><ol>${top("fooled").map(({ a, s }) => `<li>${short(a)} · fooled ${s.fooled} in ${s.rounds} round(s)</li>`).join("") || "<li>None yet</li>"}</ol></section>
+    </div>`;
+  el.querySelectorAll<HTMLButtonElement>("[data-guess]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [t, isBot] = b.dataset.guess!.split(":");
+      void queueTx("Guess", "BotOrNot", "guess", [t, isBot === "1"]).then(render);
+    }),
+  );
+  el.querySelectorAll<HTMLButtonElement>("[data-forfeit]").forEach((b) =>
+    b.addEventListener("click", () => void queueTx("Forfeit", "BotOrNot", "forfeit", [b.dataset.forfeit]).then(render)),
+  );
+  document.getElementById("claim")?.addEventListener("click", async () => {
+    for (const x of claimable) await queueTx("Claim", "BotOrNot", "claim", [x!.trader, x!.round]).catch(() => undefined);
+    void render();
+  });
+  document.getElementById("enter")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const isBot = new FormData(e.target as HTMLFormElement).get("bot") === "1";
+    const salt = `0x${[...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+    const commitment = await read<string>("BotOrNot", "commitmentOf", [me, isBot, salt]);
+    store.set(`bon-${me}`, JSON.stringify({ isBot, salt }));
+    void queueTx("Enter", "BotOrNot", "enter", [commitment]).then(render);
+  });
+  document.getElementById("reveal")?.addEventListener("click", () => {
+    const { isBot, salt } = JSON.parse(saved!);
+    void queueTx("Reveal", "BotOrNot", "reveal", [isBot, salt]).then(render);
+  });
+}
+
 const VIEWS: Record<Tab, (el: HTMLElement) => Promise<void>> = {
   shops: viewShops,
+  requests: viewRequests,
+  botornot: viewBotOrNot,
   projects: viewProjects,
   workshop: viewWorkshop,
   account: viewAccount,
 };
 
 async function render() {
-  $("#tabs").innerHTML = TABS.map((t) => `<a href="#${t}" class="${t === tab ? "on" : ""}">${t[0].toUpperCase() + t.slice(1)}</a>`).join("");
+  $("#tabs").innerHTML = TABS.map((t) => `<a href="#${t}" class="${t === tab ? "on" : ""}">${TAB_LABEL[t]}</a>`).join("");
   const el = $("#view");
   const banner = $("#banner");
   if (!dep) {

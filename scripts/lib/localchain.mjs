@@ -1,4 +1,4 @@
-// Local chain harness — start anvil, deploy the five contracts, jump time.
+// Local chain harness — start anvil, deploy the contracts, jump time.
 // The real value of a local chain is not "free gas" but controlling time: 24 h escrow,
 // 7-day disputes and offer expiry are checked in seconds instead of days.
 import path from "node:path";
@@ -96,7 +96,7 @@ export async function startChain({ port = 8546, chainId = 677 } = {}) {
 }
 
 /**
- * Deploy all five in the fixed order used by scripts/deploy.mjs.
+ * Deploy all seven in the fixed order used by scripts/deploy.mjs.
  * BazaarMarket takes the offers address in its constructor, so it is predicted from the next nonce.
  */
 export async function deployAll({ pub, wallet, artifacts, log = () => {} }) {
@@ -118,8 +118,10 @@ export async function deployAll({ pub, wallet, artifacts, log = () => {} }) {
   if (offers.toLowerCase() !== predictedOffers.toLowerCase()) {
     throw new Error(`offers landed at ${offers}, market expects ${predictedOffers} — redeploy both`);
   }
+  await deploy("BazaarRequests");
   await deploy("BazaarProjects");
-  await deploy("AgentPass");
+  const pass = await deploy("AgentPass");
+  await deploy("BotOrNot", [pass]);
   await deploy("PixelWorkshop");
   return out;
 }

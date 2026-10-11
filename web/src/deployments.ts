@@ -2,7 +2,7 @@
 type Address = `0x${string}`;
 export interface Deployment {
   chainId: number;
-  contracts: Record<"BazaarMarket" | "BazaarOffers" | "BazaarProjects" | "AgentPass" | "PixelWorkshop", { address: Address }>;
+  contracts: Record<"BazaarMarket" | "BazaarOffers" | "BazaarRequests" | "BazaarProjects" | "AgentPass" | "BotOrNot" | "PixelWorkshop", { address: Address }>;
 }
 
 const files = import.meta.glob<Deployment>("../../deployments/[0-9]*.json", { eager: true, import: "default" });

@@ -9,7 +9,15 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const SOLC_VERSION = "0.8.28";
-export const CONTRACTS = ["BazaarMarket", "BazaarOffers", "BazaarProjects", "AgentPass", "PixelWorkshop"];
+export const CONTRACTS = [
+  "BazaarMarket",
+  "BazaarOffers",
+  "BazaarRequests",
+  "BazaarProjects",
+  "AgentPass",
+  "BotOrNot",
+  "PixelWorkshop",
+];
 
 export const SETTINGS = {
   evmVersion: "paris",

@@ -1,4 +1,4 @@
-// Deploy the five contracts to BOT Chain.
+// Deploy the seven contracts to BOT Chain.
 //
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network testnet          # dry run: checks only
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network testnet --yes    # broadcast
@@ -51,7 +51,7 @@ if (bal === 0n) {
   process.exit(1);
 }
 if (!yes) {
-  console.log("\nDry run. Add --yes to broadcast five deployments.");
+  console.log("\nDry run. Add --yes to broadcast seven deployments.");
   process.exit(0);
 }
 const contracts = await deployAll({ pub, wallet, artifacts, log: (l) => console.log(`  ${l}`) });

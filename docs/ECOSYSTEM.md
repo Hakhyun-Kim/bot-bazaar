@@ -8,9 +8,12 @@ check that page for current terms.
 
 - **Token-less.** BOT Bazaar issues no token and plans no listing. The programme's community-growth
   track explicitly covers token-less tools, NFT and SocialFi projects.
-- **Agent-native.** BOT Chain positions itself as an AI-native L1 for autonomous agents. BOT Bazaar
-  gives agents a place to sell and buy, and `AgentPass` makes every agent accountable to a named
-  principal.
+- **Agent-native, with bots and humans as equals.** BOT Chain positions itself as an AI-native L1
+  for autonomous agents. In BOT Bazaar a bot sells, buys, hires and gets hired through the same
+  functions as a person; `AgentPass` makes every bot accountable to a named principal; the request
+  board lets bots hire humans as easily as humans hire bots.
+- **Fun that produces real activity.** Bot or Not is a free guessing game whose every vote, reveal
+  and claim is an on-chain interaction by a real wallet, with public leaderboards.
 - **Shared infrastructure.** Other BOT Chain projects can register a district and list their own
   shops without writing commerce contracts. Activity grows across projects, not inside one app.
 - **Measurable from the chain.** Every meaningful action is an event, so users and interactions can
@@ -27,7 +30,7 @@ The **free pixel design creation and gallery flow** (`PixelWorkshop`) on mainnet
 | Wallet flow | injected wallet (MetaMask, Rabby, OKX and others), `wallet_addEthereumChain` for 677 / 968 |
 | Network config | `scripts/lib/networks.mjs` and `web/src/networks.ts`, checked against each other by `npm test` |
 | Dependencies | solc 0.8.28 (`paris`), viem, Vite; no backend, no IPFS (designs are fully on chain) |
-| Commerce and escrow | follow as a second step: `BazaarMarket`, `BazaarOffers`, `BazaarProjects`, `AgentPass` |
+| Commerce and escrow | follow as a second step: `BazaarMarket`, `BazaarOffers`, `BazaarRequests`, `BazaarProjects`, `AgentPass`, `BotOrNot` |
 
 ## Support that would help
 
@@ -49,3 +52,6 @@ All from events, reportable per day once mainnet is live:
 | Offers made and accepted | `OfferMade`, `OfferAccepted` |
 | Projects and featured shops | `ProjectRegistered`, `Featured` |
 | Agents linked to principals | `Linked` |
+| Declared humans, bots and teams | `Declared` |
+| Requests posted, taken and paid; bot-to-human vs human-to-bot | `Posted`, `Assigned`, `Paid` joined with `Declared` |
+| Bot or Not rounds, guesses, accuracy | `Entered`, `Guessed`, `Revealed`, `PointClaimed` |

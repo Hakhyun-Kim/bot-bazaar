@@ -9,7 +9,8 @@ One shared marketplace layer for BOT Chain that:
 
 - anyone can sell on in one transaction, without permission;
 - any project can host as its own storefront district, with its own frontend;
-- humans and autonomous agents use in the same way, with agents accountable to a named principal;
+- bots and humans use as equals, through the same functions and escrow, with bots accountable to a
+  named principal and free to hire humans as easily as humans hire bots;
 - needs no operator: no server, no fee, no admin key.
 
 ## 2. Principles
@@ -28,9 +29,13 @@ One shared marketplace layer for BOT Chain that:
    seller, so a refunded buyer never holds both.
 6. **Hot wallets are named.** `AgentPass` lets a principal sign, without gas, that an agent acts
    for it. Frontends show the principal.
-7. **Free first.** Creating a pixel design costs only gas. A price is optional and goes to the
+7. **Parity.** No function reads whether the caller is a bot. Badges (`AgentPass.declare`) and
+   request labels (`wants`) are for display; the escrow treats every address the same.
+8. **Play is part of the product.** Bot or Not turns the open question "who am I trading with?"
+   into a game with on-chain scores and no money at stake.
+9. **Free first.** Creating a pixel design costs only gas. A price is optional and goes to the
    creator directly.
-8. **Scale work waits for users.** No indexer, cache or off-chain database until traffic needs one.
+10. **Scale work waits for users.** No indexer, cache or off-chain database until traffic needs one.
    Paged view functions are enough for launch.
 
 ## 3. Invariants
@@ -47,6 +52,10 @@ These hold for every reachable state and are exercised by `npm run test:local`.
 | I6 | Only `BazaarOffers` can create a purchase at a price other than the stored one | `purchaseFor` caller check, immutable |
 | I7 | An Agent Pass signature is usable once, before its deadline, by the named agent only | nonce, deadline, `msg.sender` in digest |
 | I8 | Project owners never hold or route funds | `BazaarProjects` has no payable function |
+| I9 | No market, offer or request function reads `kindOf` | parity: badges are display only |
+| I10 | A request's reward goes to exactly one of the assigned worker or the poster, once | `_pay`, `_return` set a final state |
+| I11 | A submitted result is paid unless the poster accepts, or the worker hands it back, before then | `release` after `releaseAt` |
+| I12 | Bot or Not answers cannot change after entering; each address guesses once per round and claims once | commitment, `_vote` |
 
 ## 4. Data model
 
@@ -59,6 +68,11 @@ These hold for every reachable state and are exercised by `npm run test:local`.
 - `Offer { buyer, seller, amount, expiresAt, active, itemName }`, indexed per seller with
   swap-and-pop so `offersFor(seller)` stays small.
 - `Project { owner, createdAt, name, metadataURI }`, ids from 1 (0 means an independent shop).
+- `Request { poster, worker, reward, deadline, releaseAt, wants, state, disputed, title, detailsURI,
+  resultURI }`; open ones indexed with swap-and-pop for `openRequests`.
+- `AgentPass.kindOf / labelOf`: 0 undeclared, 1 human, 2 bot, 3 team, plus a 60-byte label.
+- `BotOrNot.Round { commitment, startedAt, humanVotes, botVotes, closed, revealed, wasBot }` per
+  trader, and `Score { guesses, correct, rounds, fooled, forfeits }` per address.
 - `Design { creator, createdAt, mints, price, palette, pixels(bytes16), name }`.
 
 ### Suggested shop metadata JSON
@@ -91,6 +105,17 @@ choices.
 **No automatic settlement.** There is no keeper or timer. Anyone can call `release`, and
 `releaseMany` lets a seller batch it. This keeps the contracts free of off-chain dependencies.
 
+**Parity over verification.** Proving who is a bot is impossible on chain and would invite
+workarounds. The contracts instead make the distinction irrelevant to what anyone may do, show
+self-declared badges, and let bots point at an accountable principal.
+
+**A reverse market for hiring.** The request board covers work that has no catalogue price yet and
+is where the bot/human relationship is most interesting: bots hiring people for judgement, people
+hiring bots for persistence.
+
+**Points claimed, not pushed.** Bot or Not credits right guesses when each guesser calls `claim`,
+so `reveal` never loops over voters and its gas does not grow with a round's popularity.
+
 **Native BOT first.** Stablecoin payments come next as a separate path with the same escrow rules;
 starting with one asset keeps the first audit small.
 
@@ -113,7 +138,7 @@ Each step ships with tests on the local chain.
 
 1. **Testnet (968)** deployment and a public web build pointing at it.
 2. **Pixel Workshop on mainnet (677)**: creation and gallery only, gas only.
-3. **Market on mainnet**: shops, escrow, offers, projects, Agent Pass.
+3. **Market on mainnet**: shops, escrow, offers, requests, projects, Agent Pass, Bot or Not.
 4. **Stablecoin payments**: an ERC-20 path beside native BOT, same escrow rules.
 5. **Agent toolkit**: SDK and MCP server so agents can open shops, answer offers within an
    owner-set floor (`haggle.mjs`) and confirm deliveries.

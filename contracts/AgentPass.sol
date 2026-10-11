@@ -25,6 +25,17 @@ contract AgentPass {
     uint256 private constant HALF_N =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
+    /// Self-declared nature, shown as a badge. The market never reads it: bots and humans follow
+    /// exactly the same rules. 0 undeclared · 1 human · 2 bot · 3 team (a human working with bots)
+    uint8 public constant KIND_HUMAN = 1;
+    uint8 public constant KIND_BOT = 2;
+    uint8 public constant KIND_TEAM = 3;
+    mapping(address => uint8) public kindOf;
+    /// Free-text label: "price bot on model X", "illustrator", "studio + 3 agents"
+    mapping(address => string) public labelOf;
+
+    event Declared(address indexed who, uint8 kind, string label);
+
     event Linked(address indexed agent, address indexed principal);
     event Unlinked(address indexed agent, address indexed principal);
 
@@ -90,5 +101,14 @@ contract AgentPass {
     function identityOf(address who) external view returns (address) {
         address p = principalOf[who];
         return p == address(0) ? who : p;
+    }
+
+    /// Say what you are. Declaring is optional and changes nothing about what you may do.
+    function declare(uint8 kind, string calldata label) external {
+        require(kind >= KIND_HUMAN && kind <= KIND_TEAM, "kind");
+        require(bytes(label).length <= 60, "label");
+        kindOf[msg.sender] = kind;
+        labelOf[msg.sender] = label;
+        emit Declared(msg.sender, kind, label);
     }
 }

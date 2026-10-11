@@ -26,7 +26,7 @@ a { color: var(--accent); }
 body > header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .brand { font-weight: 700; font-size: 18px; }
 .logo { color: var(--accent); }
-nav { display: flex; gap: 4px; flex: 1; }
+nav { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
 nav a { padding: 6px 10px; border-radius: 6px; text-decoration: none; color: var(--muted); }
 nav a.on { background: var(--bg); color: var(--text); }
 .right { display: flex; gap: 8px; }
@@ -62,3 +62,8 @@ td, th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: lef
 .toast.error, .error { color: var(--danger); }
 .toast.error { background: var(--panel); border: 1px solid var(--danger); }
 footer { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 16px; }
+.hero { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.kind { font-size: 12px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.kind.k2 { border-color: var(--accent); }
+.pass { font-size: 12px; }
+.boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }

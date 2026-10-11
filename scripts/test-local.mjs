@@ -1,4 +1,4 @@
-// End-to-end on a local anvil (chain id 677, paris hardfork): deploy all five contracts and walk
+// End-to-end on a local anvil (chain id 677, paris hardfork): deploy all seven contracts and walk
 // every path a buyer, seller, project owner, agent and creator can take. Gas-free, a few seconds.
 import { parseEther, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -213,9 +213,105 @@ await check("cannot show a design you do not own", async () => {
   await reverts(other, "PixelWorkshop", "setProfileDesign", [1n], undefined, "not-owned");
 });
 
+console.log("\nbots and humans");
+await check("declare a kind; the market treats a declared bot exactly like anyone", async () => {
+  await reverts(other, "AgentPass", "declare", [4, ""], undefined, "kind");
+  await write(other, "AgentPass", "declare", [2, "price bot"]);
+  eq(await read("AgentPass", "kindOf", [addr(other)]), 2);
+  await write(other, "BazaarMarket", "openShop", ["Bot stall", "", 0, 3, [{ name: "Daily report", price: 1000n }]]);
+  await write(buyer, "BazaarMarket", "buyItem", [addr(other), 0], 1000n);
+});
+
+console.log("\nbot or not");
+const salt = "0x" + "11".repeat(32);
+await check("a declared trader cannot enter; an undeclared one commits", async () => {
+  await reverts(other, "BotOrNot", "enter", ["0x" + "00".repeat(32)], undefined, "declared");
+  const c = await read("BotOrNot", "commitmentOf", [addr(seller), true, salt]);
+  await write(seller, "BotOrNot", "enter", [c]);
+  await reverts(seller, "BotOrNot", "enter", [c], undefined, "open");
+});
+await check("guesses: one each, never on yourself; reveal waits a day", async () => {
+  await reverts(seller, "BotOrNot", "guess", [addr(seller), true], undefined, "self");
+  await write(buyer, "BotOrNot", "guess", [addr(seller), false]);
+  await write(other, "BotOrNot", "guess", [addr(seller), true]);
+  await write(deployer, "BotOrNot", "guess", [addr(seller), false]);
+  await reverts(buyer, "BotOrNot", "guess", [addr(seller), true], undefined, "voted");
+  await reverts(seller, "BotOrNot", "reveal", [true, salt], undefined, "early");
+});
+await check("reveal must match the commitment; fooled counts wrong guesses", async () => {
+  await node.increaseTime(DAY + 1);
+  await reverts(seller, "BotOrNot", "reveal", [false, salt], undefined, "commitment");
+  await write(seller, "BotOrNot", "reveal", [true, salt]);
+  const s = await read("BotOrNot", "scoreOf", [addr(seller)]);
+  eq(s[3], 2, "fooled");
+  eq(s[2], 1, "rounds");
+});
+await check("only correct guessers claim, once", async () => {
+  await reverts(buyer, "BotOrNot", "claim", [addr(seller), 0n], undefined, "wrong");
+  await write(other, "BotOrNot", "claim", [addr(seller), 0n]);
+  await reverts(other, "BotOrNot", "claim", [addr(seller), 0n], undefined, "no vote");
+  eq((await read("BotOrNot", "scoreOf", [addr(other)]))[1], 1, "correct");
+  const [who] = await read("BotOrNot", "players", [0n, 10n]);
+  eq(who.length, 4, "players");
+});
+await check("an unrevealed round can be forfeited after 14 days", async () => {
+  await write(buyer, "BotOrNot", "enter", [await read("BotOrNot", "commitmentOf", [addr(buyer), false, salt])]);
+  await reverts(other, "BotOrNot", "forfeit", [addr(buyer)], undefined, "early");
+  await node.increaseTime(15 * DAY);
+  await write(other, "BotOrNot", "forfeit", [addr(buyer)]);
+  eq((await read("BotOrNot", "scoreOf", [addr(buyer)]))[4], 1, "forfeits");
+});
+
+console.log("\nrequests");
+const soon = async (days) => BigInt((await node.pub.getBlock()).timestamp) + BigInt(days * DAY);
+await check("post with escrow; cancel before assignment returns it", async () => {
+  await write(buyer, "BazaarRequests", "post", ["Translate docs", "", 2, await soon(5)], parseEther("1"));
+  eq((await read("BazaarRequests", "openRequests", [0n, 10n]))[2], 1n);
+  const before = await balance(buyer);
+  await reverts(other, "BazaarRequests", "cancel", [0n], undefined, "poster");
+  await write(buyer, "BazaarRequests", "cancel", [0n]);
+  if ((await balance(buyer)) <= before) throw new Error("no refund");
+  eq((await read("BazaarRequests", "openRequests", [0n, 10n]))[2], 0n);
+});
+await check("a bot posts, a human does the work, poster accepts, worker paid", async () => {
+  await write(other, "BazaarRequests", "post", ["Label 200 photos", "ipfs://task", 1, await soon(5)], parseEther("0.3"));
+  await write(seller, "BazaarRequests", "pitch", [1n, "done this before"]);
+  await reverts(seller, "BazaarRequests", "assign", [1n, addr(seller)], undefined, "poster");
+  await write(other, "BazaarRequests", "assign", [1n, addr(seller)]);
+  await reverts(buyer, "BazaarRequests", "submit", [1n, "ipfs://x"], undefined, "worker");
+  await write(seller, "BazaarRequests", "submit", [1n, "ipfs://labels"]);
+  const before = await balance(seller);
+  await write(other, "BazaarRequests", "accept", [1n]);
+  eq((await balance(seller)) - before, parseEther("0.3"));
+});
+await check("a silent poster cannot keep work: release after review, dispute extends it", async () => {
+  await write(buyer, "BazaarRequests", "post", ["Write a bot", "", 0, await soon(5)], parseEther("0.2"));
+  await write(buyer, "BazaarRequests", "assign", [2n, addr(other)]);
+  await write(other, "BazaarRequests", "submit", [2n, "https://example.org/bot"]);
+  await write(buyer, "BazaarRequests", "dispute", [2n]);
+  await node.increaseTime(4 * DAY);
+  await reverts(seller, "BazaarRequests", "release", [2n], undefined, "state");
+  await node.increaseTime(7 * DAY);
+  await write(seller, "BazaarRequests", "release", [2n]);
+  eq((await read("BazaarRequests", "requestAt", [2n])).state, 3, "paid");
+});
+await check("missed deadline: poster reclaims; worker can hand back", async () => {
+  await write(buyer, "BazaarRequests", "post", ["Late job", "", 0, await soon(1)], parseEther("0.1"));
+  await write(buyer, "BazaarRequests", "assign", [3n, addr(other)]);
+  await reverts(buyer, "BazaarRequests", "reclaim", [3n], undefined, "state");
+  await node.increaseTime(2 * DAY);
+  await reverts(other, "BazaarRequests", "submit", [3n, "x"], undefined, "late");
+  await write(buyer, "BazaarRequests", "reclaim", [3n]);
+  await write(buyer, "BazaarRequests", "post", ["Changed mind", "", 0, await soon(3)], parseEther("0.1"));
+  await write(buyer, "BazaarRequests", "assign", [4n, addr(other)]);
+  await write(other, "BazaarRequests", "handBack", [4n]);
+  eq((await read("BazaarRequests", "requestAt", [4n])).state, 4, "returned");
+});
+
 console.log("\nshop close");
 await check("closing removes the shop from the open index", async () => {
   await write(seller, "BazaarMarket", "closeShop");
+  await write(other, "BazaarMarket", "closeShop");
   eq((await read("BazaarMarket", "openShops", [0n, 10n]))[2], 0n);
 });
 
