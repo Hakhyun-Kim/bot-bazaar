@@ -14,6 +14,7 @@ import {
 } from "viem";
 import abiJson from "./abi.json";
 import type { DemoChain } from "./demo";
+import type { Target, WorldApi, WorldData } from "./world/World";
 import { deploymentFor, type Deployment } from "./deployments";
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
@@ -23,9 +24,9 @@ type Name = keyof Deployment["contracts"];
 const ABI = abiJson as unknown as Record<Name, readonly unknown[]>;
 
 const CATEGORIES = ["Goods (B2C)", "Service (B2B)", "Developer asset", "Agent service"];
-const TABS = ["shops", "requests", "botornot", "projects", "workshop", "account"] as const;
+const TABS = ["bazaar", "shops", "requests", "botornot", "projects", "workshop", "account"] as const;
 const TAB_LABEL: Record<string, string> = {
-  shops: "Shops", requests: "Requests", botornot: "Bot or Not", projects: "Projects", workshop: "Workshop", account: "Account",
+  bazaar: "Bazaar", shops: "Shops", requests: "Requests", botornot: "Bot or Not", projects: "Projects", workshop: "Workshop", account: "Account",
 };
 /** AgentPass.kindOf — self-declared, display only. The contracts treat every kind the same. */
 const KINDS = [
@@ -59,8 +60,8 @@ type Key = NetworkKey | "demo";
 let networkKey = (store.get("bazaar-network") as Key) || (deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
 let demo: DemoChain | null = null;
 let demoChain: Chain | null = null;
-let tab: Tab = (location.hash.slice(1) as Tab) || "shops";
-if (!TABS.includes(tab)) tab = "shops";
+let tab: Tab = (location.hash.slice(1) as Tab) || "bazaar";
+if (!TABS.includes(tab)) tab = "bazaar";
 let pub: PublicClient;
 let dep: Deployment | null = null;
 let walletClient: WalletClient | null = null;
@@ -99,6 +100,7 @@ function queueTx(label: string, name: Name, functionName: string, args: unknown[
     const r = await pub.waitForTransactionReceipt({ hash });
     if (r.status !== "success") throw new Error(`${label} reverted`);
     toast(`${label}: done`);
+    world?.pulse();
     return r;
   };
   const next = queue.then(run, run);
@@ -200,6 +202,10 @@ async function viewShops(el: HTMLElement) {
       });
     }),
   );
+  bindShopButtons(el);
+}
+
+function bindShopButtons(el: HTMLElement) {
   el.querySelectorAll<HTMLButtonElement>("[data-buy]").forEach((b) =>
     b.addEventListener("click", () => {
       const [owner, idx, price] = b.dataset.buy!.split(":");
@@ -599,7 +605,95 @@ async function viewBotOrNot(el: HTMLElement) {
   });
 }
 
-const VIEWS: Record<Tab, (el: HTMLElement) => Promise<void>> = {
+// ---------- the bazaar as a place (src/world/World.tsx) ----------
+let world: WorldApi | null = null;
+let panel: Target | null = null;
+const shopCache = new Map<Address, ShopData & { owner: Address }>();
+
+async function worldData(): Promise<WorldData> {
+  const [owners, shops] = await read<[Address[], ShopData[], bigint]>("BazaarMarket", "openShops", [0n, 100n]);
+  const [, reqs] = await read<[bigint[], RequestData[], bigint]>("BazaarRequests", "openRequests", [0n, 20n]);
+  const [players] = await read<[Address[], Score[]]>("BotOrNot", "players", [0n, 200n]);
+  const rounds = (
+    await Promise.all(
+      players.map(async (a) => {
+        const n = await read<bigint>("BotOrNot", "roundCount", [a]);
+        if (n === 0n) return null;
+        const r = await read<Round>("BotOrNot", "roundOf", [a, n - 1n]);
+        return r.closed ? null : { trader: a, bot: r.botVotes, human: r.humanVotes };
+      }),
+    )
+  ).filter((x) => x !== null);
+  const [, designs] = await read<[bigint[], { name: string; pixels: string; palette: number }[]]>("PixelWorkshop", "designsPage", [0n, 48n]);
+  const [, projects] = await read<[bigint[], { name: string }[]]>("BazaarProjects", "projectsPage", [0n, 50n]);
+  const purchases = await read<bigint>("BazaarMarket", "purchaseCount");
+  const who = await whoIs([...owners, ...(me ? [me] : [])]);
+  shopCache.clear();
+  owners.forEach((o, i) => shopCache.set(o, { owner: o, ...shops[i] }));
+  return {
+    me,
+    myKind: me ? who.get(me)?.kind ?? 0 : 0,
+    myShop: !!me && owners.includes(me),
+    shops: owners.map((o, i) => ({
+      owner: o,
+      title: shops[i].title,
+      category: shops[i].category,
+      kind: who.get(o)?.kind ?? 0,
+      label: who.get(o)?.label ?? "",
+      items: shops[i].items.map((it) => ({ name: it.name, price: bot(it.price) })),
+    })),
+    requests: reqs.map((r) => ({ title: r.title, reward: bot(r.reward), wants: r.wants })),
+    rounds,
+    designs: [...designs].reverse().slice(0, 8),
+    projects: projects.map((p) => p.name),
+    purchases: Number(purchases),
+  };
+}
+
+function openPanel(t: Target) {
+  panel = t;
+  void renderPanel();
+}
+
+async function renderPanel() {
+  const box = $("#panel");
+  box.hidden = !panel;
+  if (!panel) return;
+  const body = $("#panel-body");
+  body.innerHTML = "<p class='muted'>Loading…</p>";
+  try {
+    if (panel.kind === "shop") {
+      const s = shopCache.get(panel.owner as Address);
+      if (!s) {
+        body.innerHTML = "<p>This shop has closed.</p>";
+        return;
+      }
+      const who = await whoIs([s.owner]);
+      body.innerHTML = `<div class="grid">${shopCard(s, who.get(s.owner))}</div>`;
+      bindShopButtons(body);
+    } else await VIEWS[panel.tab](body);
+  } catch (e) {
+    body.innerHTML = `<p class="error">Could not read the chain: ${esc((e as Error).message)}</p>`;
+  }
+}
+
+/** The 3D bazaar fills whatever the header and banner leave of the window. */
+function fitStage() {
+  const st = $("#stage");
+  if (!st.hidden) st.style.height = `${Math.max(360, innerHeight - st.getBoundingClientRect().top - window.scrollY)}px`;
+}
+addEventListener("resize", fitStage);
+
+async function viewBazaar() {
+  if (!world) {
+    const { mountWorld } = await import("./world/World");
+    world = mountWorld($("#world"), openPanel);
+  }
+  world.update(await worldData());
+  if (panel) await renderPanel();
+}
+
+const VIEWS: Record<Exclude<Tab, "bazaar">, (el: HTMLElement) => Promise<void>> = {
   shops: viewShops,
   requests: viewRequests,
   botornot: viewBotOrNot,
@@ -612,6 +706,8 @@ async function render() {
   $("#tabs").innerHTML = TABS.map((t) => `<a href="#${t}" class="${t === tab ? "on" : ""}">${TAB_LABEL[t]}</a>`).join("");
   const el = $("#view");
   const banner = $("#banner");
+  $("#stage").hidden = tab !== "bazaar" || !dep;
+  el.hidden = tab === "bazaar" && !!dep;
   if (!dep) {
     banner.hidden = false;
     banner.textContent = `Not deployed on ${chain().name} yet. Run scripts/deploy.mjs (or npm run chain for a local one), or switch network.`;
@@ -620,13 +716,22 @@ async function render() {
   }
   banner.hidden = networkKey !== "mainnet" ? false : true;
   if (demo) {
-    banner.innerHTML = `Demo: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser. Clock ${new Date(
+    banner.innerHTML = `Demo<span class="long">: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser.</span> · Clock ${new Date(
       demo.now() * 1000).toLocaleString()} <button id="skip">⏩ +1 day</button> <button class="ghost" id="reset">Reset</button>`;
     $("#skip").addEventListener("click", () => (demo!.skip(86400), void render()));
     $("#reset").addEventListener("click", () => {
       if (confirm("Start the demo over? Your demo shops, purchases and rounds are cleared.")) demo!.reset(), location.reload();
     });
   } else banner.textContent = networkKey === "testnet" ? "Testnet: tokens have no value." : "Local chain.";
+  fitStage();
+  if (tab === "bazaar") {
+    try {
+      await viewBazaar();
+    } catch (e) {
+      toast(`Could not read the chain: ${(e as Error).message}`, true);
+    }
+    return;
+  }
   el.innerHTML = "<p class='muted'>Loading…</p>";
   try {
     await VIEWS[tab](el);
@@ -676,6 +781,10 @@ $<HTMLSelectElement>("#persona").addEventListener("change", (e) => {
   void render();
 });
 $("#connect").addEventListener("click", () => void connect());
+$("#panel-close").addEventListener("click", () => {
+  panel = null;
+  void renderPanel();
+});
 addEventListener("hashchange", () => {
   tab = (location.hash.slice(1) as Tab) || "shops";
   void render();
