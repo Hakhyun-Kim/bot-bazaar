@@ -56,9 +56,11 @@ const store = {
   },
 };
 
-// "demo" runs the contracts on an EVM inside this page (src/demo.ts): the default until a real deployment exists.
+// Testnet is the default (harry, 2026-10-11). "demo" runs the contracts on an EVM inside this page
+// (src/demo.ts) and is the fallback while testnet has no deployment.
 type Key = NetworkKey | "demo";
-let networkKey = (store.get("bazaar-network") as Key) || (deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
+const NETWORK_CHOICE = "bazaar-network-v2"; // v2: choices made while demo was the default are dropped
+let networkKey = (store.get(NETWORK_CHOICE) as Key) || (deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
 let demo: DemoChain | null = null;
 let demoChain: Chain | null = null;
 let tab: Tab = (location.hash.slice(1) as Tab) || "bazaar";
@@ -893,7 +895,7 @@ sel.innerHTML = [...(Object.keys(NETWORKS) as NetworkKey[]).map((k) => [k, NETWO
   .map(([k, name]) => `<option value="${k}"${k === networkKey ? " selected" : ""}>${name}</option>`)
   .join("");
 // Only a choice the visitor made is remembered, so the default can move from demo to testnet.
-sel.addEventListener("change", () => (store.set("bazaar-network", sel.value), void selectNetwork(sel.value as Key)));
+sel.addEventListener("change", () => (store.set(NETWORK_CHOICE, sel.value), void selectNetwork(sel.value as Key)));
 $<HTMLSelectElement>("#persona").addEventListener("change", (e) => {
   me = (e.target as HTMLSelectElement).value as Address;
   store.set("bazaar-demo-persona", me);
