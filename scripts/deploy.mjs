@@ -22,9 +22,13 @@ const opt = (k) => {
 const network = opt("--network") || "testnet";
 const yes = argv.includes("--yes");
 const chain = chainOf(network, opt("--rpc"));
-const key = process.env.DEPLOYER_KEY;
-if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
-  console.error("Set DEPLOYER_KEY=0x<64 hex> in the environment (the key is not stored anywhere).");
+// Pasted keys often carry whitespace or come without 0x (MetaMask exports bare hex): accept both.
+const raw = (process.env.DEPLOYER_KEY || "").trim();
+const key = /^[0-9a-fA-F]{64}$/.test(raw) ? `0x${raw}` : raw;
+if (!/^0x[0-9a-fA-F]{64}$/.test(key)) {
+  // Shape only, never the value: enough to tell a missing secret from a mangled one.
+  const shape = raw ? `${raw.length} characters, ${raw.startsWith("0x") ? "starts with 0x" : "no 0x prefix"}` : "empty";
+  console.error(`Set DEPLOYER_KEY=0x<64 hex> in the environment (the key is not stored anywhere). Got: ${shape}.`);
   process.exit(1);
 }
 const account = privateKeyToAccount(key);
