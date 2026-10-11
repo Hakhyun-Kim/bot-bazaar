@@ -205,15 +205,21 @@ async function fundFromExtension() {
   }
 }
 
+/** Set after the warning is accepted; the key then shows in the panel with its own Copy button. */
+let showKey = false;
+
+// The copy runs on its own click: after a confirm() dialog some browsers (iOS Safari) refuse the
+// clipboard, which used to leave the address from an earlier Copy in the clipboard instead.
 async function copyKey() {
   const key = store.get(burnerKeyName(chain().id));
   if (!key) return;
-  if (!confirm("Copy this browser wallet's private key? Anyone with it controls the wallet. Use it on testnet only.")) return;
   try {
     await navigator.clipboard.writeText(key);
-    toast("Private key copied. Keep it out of chats and commits.");
+    toast("Private key copied (66 characters). Keep it out of chats and commits.");
   } catch {
-    toast("Could not reach the clipboard", true);
+    const field = document.querySelector<HTMLInputElement>("#wallet-key");
+    field?.select();
+    toast("Select the key in the box and copy it by hand", true);
   }
 }
 
@@ -233,7 +239,10 @@ function renderWallet() {
     ${networkKey === "testnet" ? `<p><button data-w="faucet">Get test BOT</button> <span class="muted">copies your address and opens the faucet</span></p>` : ""}
     ${burner ? `
       <p><button class="ghost" data-w="fund">Send from MetaMask…</button></p>
-      <p><button class="ghost" data-w="key">Copy private key</button> <span class="muted">testnet only · import it elsewhere or use it as a deploy key</span></p>
+      ${showKey
+        ? `<p class="muted">Private key (testnet only; anyone with it controls this wallet)</p>
+           <p><input id="wallet-key" readonly value="${esc(store.get(burnerKeyName(chain().id)) ?? "")}" /> <button data-w="key">Copy private key</button> <button class="ghost" data-w="hide">Hide</button></p>`
+        : `<p><button class="ghost" data-w="reveal">Show private key</button> <span class="muted">testnet only · import it elsewhere or use it as a deploy key</span></p>`}
       <p><button class="ghost" data-w="ext">Use MetaMask instead</button></p>`
     : networkKey === "testnet" ? `<p><button class="ghost" data-w="burner">Use the browser wallet</button></p>` : ""}`;
   box.querySelectorAll<HTMLButtonElement>("[data-w]").forEach((b) =>
@@ -242,6 +251,8 @@ function renderWallet() {
       if (w === "copy") await navigator.clipboard.writeText(me!).then(() => toast("Address copied"), () => toast(me!));
       if (w === "faucet") await getTestBot();
       if (w === "fund") await fundFromExtension();
+      if (w === "reveal" && confirm("Show this browser wallet's private key? Anyone with it controls the wallet. Use it on testnet only.")) (showKey = true), renderWallet();
+      if (w === "hide") (showKey = false), renderWallet();
       if (w === "key") await copyKey();
       if (w === "ext") await connect();
       if (w === "burner") (useBurner(), store.set("bazaar-wallet", "burner"), void render());
@@ -944,6 +955,9 @@ $<HTMLSelectElement>("#persona").addEventListener("change", (e) => {
 $("#connect").addEventListener("click", () => {
   if (!me) return void connect();
   $("#wallet").hidden = !$("#wallet").hidden;
+  showKey = false;
+  $("#wallet").innerHTML = "";
+  renderWallet();
   void refreshBalance();
 });
 $("#panel-close").addEventListener("click", () => {

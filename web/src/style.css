@@ -36,6 +36,7 @@ h2 small, h3 small { font-weight: 400; color: var(--muted); font-size: 14px; }
 #wallet { position: fixed; top: 56px; right: 12px; z-index: 30; width: min(380px, calc(100vw - 24px)); padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px #0003; }
 #wallet h3 { margin: 0 0 8px; }
 #wallet p { margin: 6px 0; }
+#wallet #wallet-key { width: 100%; font: 12px ui-monospace, monospace; margin-bottom: 6px; }
 #wallet .addr code { font-size: 12px; word-break: break-all; }
 #wallet .warn, #banner .warn { color: #c0392b; font-weight: 600; }
 #banner { padding: 8px 16px; background: #ffd66b33; text-align: center; }
