@@ -319,6 +319,11 @@ DEPLOYER_KEY=0x... npm run deploy -- --network testnet --yes    # broadcast seve
 DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --yes
 ```
 
+Testnet can also be deployed from GitHub: add a repository secret `DEPLOYER_KEY` (a testnet-only
+wallet funded from the faucet), then run the **deploy-testnet** workflow, first as a dry run and
+then with *broadcast* ticked. It commits `deployments/968.json` and rebuilds the Pages site, which
+then opens on testnet with a browser wallet; the in-browser demo stays in the network menu.
+
 The script refuses to run if the RPC reports a different chain id, if the deployer has no BOT, or
 if `deployments/<chainId>.json` already exists (pass `--force` to deploy a fresh set). It deploys
 in a fixed order: `BazaarMarket` receives the address `BazaarOffers` will have (predicted from the

@@ -742,7 +742,6 @@ async function render() {
 
 async function selectNetwork(key: Key) {
   networkKey = key;
-  store.set("bazaar-network", key);
   walletClient = null;
   me = null;
   demo = null;
@@ -774,7 +773,8 @@ const sel = $<HTMLSelectElement>("#network");
 sel.innerHTML = [...(Object.keys(NETWORKS) as NetworkKey[]).map((k) => [k, NETWORKS[k].name]), ["demo", "Demo (in this browser)"]]
   .map(([k, name]) => `<option value="${k}"${k === networkKey ? " selected" : ""}>${name}</option>`)
   .join("");
-sel.addEventListener("change", () => void selectNetwork(sel.value as Key));
+// Only a choice the visitor made is remembered, so the default can move from demo to testnet.
+sel.addEventListener("change", () => (store.set("bazaar-network", sel.value), void selectNetwork(sel.value as Key)));
 $<HTMLSelectElement>("#persona").addEventListener("change", (e) => {
   me = (e.target as HTMLSelectElement).value as Address;
   store.set("bazaar-demo-persona", me);
