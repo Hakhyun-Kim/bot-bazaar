@@ -1,0 +1,22 @@
+{
+  "name": "bot-bazaar",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "compile": "node scripts/compile.mjs",
+    "test": "node --test test/logic.test.mjs",
+    "test:local": "node scripts/test-local.mjs",
+    "chain": "node scripts/dev-chain.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "verify-input": "node scripts/verify-input.mjs",
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web"
+  },
+  "devDependencies": {
+    "solc": "0.8.28",
+    "viem": "^2.21.0"
+  }
+}

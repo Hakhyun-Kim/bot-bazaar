@@ -1,0 +1,21 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run compile
+      - run: git diff --exit-code web/src/abi.json
+      - run: npm test
+      - run: npm i @foundry-rs/anvil --ignore-scripts --no-save
+      - run: npm run test:local
+      - run: npm run build

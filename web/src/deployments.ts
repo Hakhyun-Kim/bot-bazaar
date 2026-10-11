@@ -1,0 +1,13 @@
+// Addresses come from deployments/<chainId>.json written by scripts/deploy.mjs.
+type Address = `0x${string}`;
+export interface Deployment {
+  chainId: number;
+  contracts: Record<"BazaarMarket" | "BazaarOffers" | "BazaarProjects" | "AgentPass" | "PixelWorkshop", { address: Address }>;
+}
+
+const files = import.meta.glob<Deployment>("../../deployments/[0-9]*.json", { eager: true, import: "default" });
+
+export function deploymentFor(chainId: number): Deployment | null {
+  for (const d of Object.values(files)) if (d.chainId === chainId) return d;
+  return null;
+}

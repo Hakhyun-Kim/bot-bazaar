@@ -1,0 +1,7 @@
+node_modules/
+dist/
+web/dist/
+deployments/31337.json
+deployments/standard-input.json
+.env
+*.key

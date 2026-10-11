@@ -1,0 +1,2390 @@
+{
+ "BazaarMarket": [
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "offers_",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "constructor"
+  },
+  {
+   "inputs": [],
+   "name": "NotListed",
+   "type": "error"
+  },
+  {
+   "inputs": [],
+   "name": "TransferFailed",
+   "type": "error"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "expected",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "sent",
+     "type": "uint256"
+    }
+   ],
+   "name": "WrongPrice",
+   "type": "error"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "account",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "operator",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "bool",
+     "name": "approved",
+     "type": "bool"
+    }
+   ],
+   "name": "ApprovalForAll",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "buyer",
+     "type": "address"
+    }
+   ],
+   "name": "Disputed",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "price",
+     "type": "uint256"
+    }
+   ],
+   "name": "Listed",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "buyer",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "amount",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "tokenId",
+     "type": "uint256"
+    }
+   ],
+   "name": "Purchased",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "who",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "value",
+     "type": "uint256"
+    }
+   ],
+   "name": "Redeemed",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "buyer",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "amount",
+     "type": "uint256"
+    }
+   ],
+   "name": "Refunded",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "amount",
+     "type": "uint256"
+    }
+   ],
+   "name": "Settled",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "owner",
+     "type": "address"
+    }
+   ],
+   "name": "ShopClosed",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "owner",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "uint32",
+     "name": "projectId",
+     "type": "uint32"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint8",
+     "name": "category",
+     "type": "uint8"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "title",
+     "type": "string"
+    }
+   ],
+   "name": "ShopOpened",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "operator",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "from",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "to",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256[]",
+     "name": "values",
+     "type": "uint256[]"
+    }
+   ],
+   "name": "TransferBatch",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "operator",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "from",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "to",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "value",
+     "type": "uint256"
+    }
+   ],
+   "name": "TransferSingle",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    }
+   ],
+   "name": "Unlisted",
+   "type": "event"
+  },
+  {
+   "inputs": [],
+   "name": "CAT_AGENT",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "CAT_DEV_ASSET",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "CAT_GOODS",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "CAT_MAX",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "CAT_SERVICE",
+   "outputs": [
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "DISPUTE_EXTENSION",
+   "outputs": [
+    {
+     "internalType": "uint64",
+     "name": "",
+     "type": "uint64"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "MAX_ITEMS",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "RELEASE_AFTER",
+   "outputs": [
+    {
+     "internalType": "uint64",
+     "name": "",
+     "type": "uint64"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "account",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "balanceOf",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address[]",
+     "name": "accounts",
+     "type": "address[]"
+    },
+    {
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    }
+   ],
+   "name": "balanceOfBatch",
+   "outputs": [
+    {
+     "internalType": "uint256[]",
+     "name": "out",
+     "type": "uint256[]"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address payable",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    }
+   ],
+   "name": "buy",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "payable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address payable",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "uint8",
+     "name": "index",
+     "type": "uint8"
+    }
+   ],
+   "name": "buyItem",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "payable",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "closeShop",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "name": "confirm",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "name": "dispute",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "account",
+     "type": "address"
+    },
+    {
+     "internalType": "address",
+     "name": "operator",
+     "type": "address"
+    }
+   ],
+   "name": "isApprovedForAll",
+   "outputs": [
+    {
+     "internalType": "bool",
+     "name": "",
+     "type": "bool"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    },
+    {
+     "internalType": "uint128",
+     "name": "price",
+     "type": "uint128"
+    }
+   ],
+   "name": "list",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    }
+   ],
+   "name": "listingOf",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "price",
+     "type": "uint256"
+    },
+    {
+     "internalType": "bool",
+     "name": "active",
+     "type": "bool"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "offers",
+   "outputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "string",
+     "name": "title",
+     "type": "string"
+    },
+    {
+     "internalType": "string",
+     "name": "metadataURI",
+     "type": "string"
+    },
+    {
+     "internalType": "uint32",
+     "name": "projectId",
+     "type": "uint32"
+    },
+    {
+     "internalType": "uint8",
+     "name": "category",
+     "type": "uint8"
+    },
+    {
+     "components": [
+      {
+       "internalType": "string",
+       "name": "name",
+       "type": "string"
+      },
+      {
+       "internalType": "uint128",
+       "name": "price",
+       "type": "uint128"
+      }
+     ],
+     "internalType": "struct BazaarMarket.ShopItem[]",
+     "name": "items",
+     "type": "tuple[]"
+    }
+   ],
+   "name": "openShop",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "offset",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "limit",
+     "type": "uint256"
+    }
+   ],
+   "name": "openShops",
+   "outputs": [
+    {
+     "internalType": "address[]",
+     "name": "owners",
+     "type": "address[]"
+    },
+    {
+     "components": [
+      {
+       "internalType": "string",
+       "name": "title",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "metadataURI",
+       "type": "string"
+      },
+      {
+       "internalType": "uint32",
+       "name": "projectId",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint8",
+       "name": "category",
+       "type": "uint8"
+      },
+      {
+       "internalType": "uint64",
+       "name": "openedAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "bool",
+       "name": "open",
+       "type": "bool"
+      },
+      {
+       "components": [
+        {
+         "internalType": "string",
+         "name": "name",
+         "type": "string"
+        },
+        {
+         "internalType": "uint128",
+         "name": "price",
+         "type": "uint128"
+        }
+       ],
+       "internalType": "struct BazaarMarket.ShopItem[]",
+       "name": "items",
+       "type": "tuple[]"
+      }
+     ],
+     "internalType": "struct BazaarMarket.Shop[]",
+     "name": "data",
+     "type": "tuple[]"
+    },
+    {
+     "internalType": "uint256",
+     "name": "total",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "purchaseCount",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "buyer",
+     "type": "address"
+    },
+    {
+     "internalType": "address payable",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    }
+   ],
+   "name": "purchaseFor",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "payable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "purchaseOf",
+   "outputs": [
+    {
+     "internalType": "address",
+     "name": "buyer",
+     "type": "address"
+    },
+    {
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "amount",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint64",
+     "name": "releaseAt",
+     "type": "uint64"
+    },
+    {
+     "internalType": "bool",
+     "name": "settled",
+     "type": "bool"
+    },
+    {
+     "internalType": "bool",
+     "name": "disputed",
+     "type": "bool"
+    },
+    {
+     "internalType": "uint256",
+     "name": "tokenId",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "value",
+     "type": "uint256"
+    }
+   ],
+   "name": "redeem",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "name": "refund",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "name": "release",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    }
+   ],
+   "name": "releaseMany",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "done",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "from",
+     "type": "address"
+    },
+    {
+     "internalType": "address",
+     "name": "to",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    },
+    {
+     "internalType": "uint256[]",
+     "name": "values",
+     "type": "uint256[]"
+    },
+    {
+     "internalType": "bytes",
+     "name": "data",
+     "type": "bytes"
+    }
+   ],
+   "name": "safeBatchTransferFrom",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "from",
+     "type": "address"
+    },
+    {
+     "internalType": "address",
+     "name": "to",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "value",
+     "type": "uint256"
+    },
+    {
+     "internalType": "bytes",
+     "name": "data",
+     "type": "bytes"
+    }
+   ],
+   "name": "safeTransferFrom",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "operator",
+     "type": "address"
+    },
+    {
+     "internalType": "bool",
+     "name": "approved",
+     "type": "bool"
+    }
+   ],
+   "name": "setApprovalForAll",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "owner",
+     "type": "address"
+    }
+   ],
+   "name": "shopOf",
+   "outputs": [
+    {
+     "components": [
+      {
+       "internalType": "string",
+       "name": "title",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "metadataURI",
+       "type": "string"
+      },
+      {
+       "internalType": "uint32",
+       "name": "projectId",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint8",
+       "name": "category",
+       "type": "uint8"
+      },
+      {
+       "internalType": "uint64",
+       "name": "openedAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "bool",
+       "name": "open",
+       "type": "bool"
+      },
+      {
+       "components": [
+        {
+         "internalType": "string",
+         "name": "name",
+         "type": "string"
+        },
+        {
+         "internalType": "uint128",
+         "name": "price",
+         "type": "uint128"
+        }
+       ],
+       "internalType": "struct BazaarMarket.ShopItem[]",
+       "name": "items",
+       "type": "tuple[]"
+      }
+     ],
+     "internalType": "struct BazaarMarket.Shop",
+     "name": "",
+     "type": "tuple"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "bytes4",
+     "name": "iid",
+     "type": "bytes4"
+    }
+   ],
+   "name": "supportsInterface",
+   "outputs": [
+    {
+     "internalType": "bool",
+     "name": "",
+     "type": "bool"
+    }
+   ],
+   "stateMutability": "pure",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    }
+   ],
+   "name": "tokenIdOf",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "pure",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "string",
+     "name": "itemId",
+     "type": "string"
+    }
+   ],
+   "name": "unlist",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "uri",
+   "outputs": [
+    {
+     "internalType": "string",
+     "name": "",
+     "type": "string"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  }
+ ],
+ "BazaarOffers": [
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "market_",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "constructor"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "name": "OfferAccepted",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "OfferCancelled",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "buyer",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "itemName",
+     "type": "string"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "amount",
+     "type": "uint256"
+    }
+   ],
+   "name": "OfferMade",
+   "type": "event"
+  },
+  {
+   "inputs": [],
+   "name": "OFFER_TTL",
+   "outputs": [
+    {
+     "internalType": "uint64",
+     "name": "",
+     "type": "uint64"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "acceptOffer",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "purchaseId",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "cancelOffer",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address payable",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "string",
+     "name": "itemName",
+     "type": "string"
+    }
+   ],
+   "name": "makeOffer",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "payable",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "market",
+   "outputs": [
+    {
+     "internalType": "contract IBazaarMarket",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "offerAt",
+   "outputs": [
+    {
+     "components": [
+      {
+       "internalType": "address",
+       "name": "buyer",
+       "type": "address"
+      },
+      {
+       "internalType": "address payable",
+       "name": "seller",
+       "type": "address"
+      },
+      {
+       "internalType": "uint128",
+       "name": "amount",
+       "type": "uint128"
+      },
+      {
+       "internalType": "uint64",
+       "name": "expiresAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "bool",
+       "name": "active",
+       "type": "bool"
+      },
+      {
+       "internalType": "string",
+       "name": "itemName",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct BazaarOffers.Offer",
+     "name": "",
+     "type": "tuple"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "offerCount",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "seller",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "offset",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "limit",
+     "type": "uint256"
+    }
+   ],
+   "name": "offersFor",
+   "outputs": [
+    {
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    },
+    {
+     "components": [
+      {
+       "internalType": "address",
+       "name": "buyer",
+       "type": "address"
+      },
+      {
+       "internalType": "address payable",
+       "name": "seller",
+       "type": "address"
+      },
+      {
+       "internalType": "uint128",
+       "name": "amount",
+       "type": "uint128"
+      },
+      {
+       "internalType": "uint64",
+       "name": "expiresAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "bool",
+       "name": "active",
+       "type": "bool"
+      },
+      {
+       "internalType": "string",
+       "name": "itemName",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct BazaarOffers.Offer[]",
+     "name": "offers",
+     "type": "tuple[]"
+    },
+    {
+     "internalType": "uint256",
+     "name": "total",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  }
+ ],
+ "BazaarProjects": [
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "shop",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "bool",
+     "name": "on",
+     "type": "bool"
+    }
+   ],
+   "name": "Featured",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "owner",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "name",
+     "type": "string"
+    }
+   ],
+   "name": "ProjectRegistered",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "from",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "to",
+     "type": "address"
+    }
+   ],
+   "name": "ProjectTransferred",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "name",
+     "type": "string"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "metadataURI",
+     "type": "string"
+    }
+   ],
+   "name": "ProjectUpdated",
+   "type": "event"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    },
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "name": "featured",
+   "outputs": [
+    {
+     "internalType": "bool",
+     "name": "",
+     "type": "bool"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "featuredOf",
+   "outputs": [
+    {
+     "internalType": "address[]",
+     "name": "",
+     "type": "address[]"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "projectCount",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "projectOf",
+   "outputs": [
+    {
+     "components": [
+      {
+       "internalType": "address",
+       "name": "owner",
+       "type": "address"
+      },
+      {
+       "internalType": "uint64",
+       "name": "createdAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "string",
+       "name": "name",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "metadataURI",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct BazaarProjects.Project",
+     "name": "",
+     "type": "tuple"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "offset",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "limit",
+     "type": "uint256"
+    }
+   ],
+   "name": "projectsPage",
+   "outputs": [
+    {
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    },
+    {
+     "components": [
+      {
+       "internalType": "address",
+       "name": "owner",
+       "type": "address"
+      },
+      {
+       "internalType": "uint64",
+       "name": "createdAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "string",
+       "name": "name",
+       "type": "string"
+      },
+      {
+       "internalType": "string",
+       "name": "metadataURI",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct BazaarProjects.Project[]",
+     "name": "list",
+     "type": "tuple[]"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "string",
+     "name": "name",
+     "type": "string"
+    },
+    {
+     "internalType": "string",
+     "name": "metadataURI",
+     "type": "string"
+    }
+   ],
+   "name": "register",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "address",
+     "name": "shop",
+     "type": "address"
+    },
+    {
+     "internalType": "bool",
+     "name": "on",
+     "type": "bool"
+    }
+   ],
+   "name": "setFeatured",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "address",
+     "name": "to",
+     "type": "address"
+    }
+   ],
+   "name": "transfer",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "string",
+     "name": "name",
+     "type": "string"
+    },
+    {
+     "internalType": "string",
+     "name": "metadataURI",
+     "type": "string"
+    }
+   ],
+   "name": "update",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  }
+ ],
+ "AgentPass": [
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "agent",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "principal",
+     "type": "address"
+    }
+   ],
+   "name": "Linked",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "agent",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "principal",
+     "type": "address"
+    }
+   ],
+   "name": "Unlinked",
+   "type": "event"
+  },
+  {
+   "inputs": [],
+   "name": "LINK_TYPEHASH",
+   "outputs": [
+    {
+     "internalType": "bytes32",
+     "name": "",
+     "type": "bytes32"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "domainSeparator",
+   "outputs": [
+    {
+     "internalType": "bytes32",
+     "name": "",
+     "type": "bytes32"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "who",
+     "type": "address"
+    }
+   ],
+   "name": "identityOf",
+   "outputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "principal",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "deadline",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint8",
+     "name": "v",
+     "type": "uint8"
+    },
+    {
+     "internalType": "bytes32",
+     "name": "r",
+     "type": "bytes32"
+    },
+    {
+     "internalType": "bytes32",
+     "name": "s",
+     "type": "bytes32"
+    }
+   ],
+   "name": "link",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "agent",
+     "type": "address"
+    },
+    {
+     "internalType": "address",
+     "name": "principal",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "nonce",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "deadline",
+     "type": "uint256"
+    }
+   ],
+   "name": "linkDigest",
+   "outputs": [
+    {
+     "internalType": "bytes32",
+     "name": "",
+     "type": "bytes32"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "name": "nonces",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "name": "principalOf",
+   "outputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "agent",
+     "type": "address"
+    }
+   ],
+   "name": "revoke",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "unlink",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  }
+ ],
+ "PixelWorkshop": [
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "expected",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "sent",
+     "type": "uint256"
+    }
+   ],
+   "name": "WrongPrice",
+   "type": "error"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "collector",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "creator",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "price",
+     "type": "uint256"
+    }
+   ],
+   "name": "DesignCollected",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "creator",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "string",
+     "name": "name",
+     "type": "string"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "price",
+     "type": "uint256"
+    }
+   ],
+   "name": "DesignRegistered",
+   "type": "event"
+  },
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "who",
+     "type": "address"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "idPlus1",
+     "type": "uint256"
+    }
+   ],
+   "name": "ProfileDesignSet",
+   "type": "event"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "collect",
+   "outputs": [],
+   "stateMutability": "payable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "designAt",
+   "outputs": [
+    {
+     "components": [
+      {
+       "internalType": "address payable",
+       "name": "creator",
+       "type": "address"
+      },
+      {
+       "internalType": "uint64",
+       "name": "createdAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "uint32",
+       "name": "mints",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint128",
+       "name": "price",
+       "type": "uint128"
+      },
+      {
+       "internalType": "uint16",
+       "name": "palette",
+       "type": "uint16"
+      },
+      {
+       "internalType": "bytes16",
+       "name": "pixels",
+       "type": "bytes16"
+      },
+      {
+       "internalType": "string",
+       "name": "name",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct PixelWorkshop.Design",
+     "name": "",
+     "type": "tuple"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "designCount",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "offset",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "limit",
+     "type": "uint256"
+    }
+   ],
+   "name": "designsPage",
+   "outputs": [
+    {
+     "internalType": "uint256[]",
+     "name": "ids",
+     "type": "uint256[]"
+    },
+    {
+     "components": [
+      {
+       "internalType": "address payable",
+       "name": "creator",
+       "type": "address"
+      },
+      {
+       "internalType": "uint64",
+       "name": "createdAt",
+       "type": "uint64"
+      },
+      {
+       "internalType": "uint32",
+       "name": "mints",
+       "type": "uint32"
+      },
+      {
+       "internalType": "uint128",
+       "name": "price",
+       "type": "uint128"
+      },
+      {
+       "internalType": "uint16",
+       "name": "palette",
+       "type": "uint16"
+      },
+      {
+       "internalType": "bytes16",
+       "name": "pixels",
+       "type": "bytes16"
+      },
+      {
+       "internalType": "string",
+       "name": "name",
+       "type": "string"
+      }
+     ],
+     "internalType": "struct PixelWorkshop.Design[]",
+     "name": "list",
+     "type": "tuple[]"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "who",
+     "type": "address"
+    },
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "name": "ownedOf",
+   "outputs": [
+    {
+     "internalType": "bool",
+     "name": "",
+     "type": "bool"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "who",
+     "type": "address"
+    }
+   ],
+   "name": "profileDesignOf",
+   "outputs": [
+    {
+     "internalType": "bool",
+     "name": "exists",
+     "type": "bool"
+    },
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    },
+    {
+     "internalType": "bytes16",
+     "name": "pixels",
+     "type": "bytes16"
+    },
+    {
+     "internalType": "uint16",
+     "name": "palette",
+     "type": "uint16"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "string",
+     "name": "name",
+     "type": "string"
+    },
+    {
+     "internalType": "bytes16",
+     "name": "pixels",
+     "type": "bytes16"
+    },
+    {
+     "internalType": "uint16",
+     "name": "palette",
+     "type": "uint16"
+    },
+    {
+     "internalType": "uint128",
+     "name": "price",
+     "type": "uint128"
+    }
+   ],
+   "name": "register",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "id",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "idPlus1",
+     "type": "uint256"
+    }
+   ],
+   "name": "setProfileDesign",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  }
+ ]
+}
