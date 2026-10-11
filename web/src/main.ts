@@ -98,7 +98,12 @@ function read<T>(name: Name, functionName: string, args: unknown[] = []): Promis
 
 // ---------- writes ----------
 let queue: Promise<unknown> = Promise.resolve();
+// The same call while it is still pending is a double click, not a second order: hand back the first one.
+const inFlight = new Map<string, Promise<unknown>>();
 function queueTx(label: string, name: Name, functionName: string, args: unknown[] = [], value?: bigint) {
+  const key = JSON.stringify([name, functionName, args, value], (_, v) => (typeof v === "bigint" ? v.toString() : v));
+  const same = inFlight.get(key);
+  if (same) return same;
   const run = async () => {
     if (!walletClient || !me) throw new Error("Connect a wallet first");
     toast(`${label}: ${demo || burner ? "sending" : "confirm in your wallet"}…`);
@@ -115,10 +120,21 @@ function queueTx(label: string, name: Name, functionName: string, args: unknown[
   };
   const next = queue.then(run, run);
   queue = next.catch(() => undefined);
-  return next.catch((e: Error) => {
-    toast(`${label}: ${(e as { shortMessage?: string }).shortMessage || e.message}`, true);
-    throw e;
-  });
+  const out = next
+    .catch((e: Error) => {
+      toast(`${label}: ${(e as { shortMessage?: string }).shortMessage || e.message}`, true);
+      throw e;
+    })
+    .finally(() => inFlight.delete(key));
+  inFlight.set(key, out);
+  return out;
+}
+
+/** Keep a button pressed (disabled) until its transaction settles, so a second tap cannot send it again. */
+function busy<T>(btn: EventTarget | null | undefined, p: Promise<T>): Promise<T> {
+  if (!(btn instanceof HTMLButtonElement)) return p;
+  btn.disabled = true;
+  return p.finally(() => (btn.disabled = false));
 }
 
 function toast(msg: string, error = false) {
@@ -332,14 +348,14 @@ function bindShopButtons(el: HTMLElement) {
   el.querySelectorAll<HTMLButtonElement>("[data-buy]").forEach((b) =>
     b.addEventListener("click", () => {
       const [owner, idx, price] = b.dataset.buy!.split(":");
-      void queueTx("Buy", "BazaarMarket", "buyItem", [owner, Number(idx)], BigInt(price)).then(render);
+      void busy(b, queueTx("Buy", "BazaarMarket", "buyItem", [owner, Number(idx)], BigInt(price))).then(render);
     }),
   );
   el.querySelectorAll<HTMLButtonElement>("[data-offer]").forEach((b) =>
     b.addEventListener("click", () => {
       const [owner, item] = b.dataset.offer!.split("|");
       const amount = prompt(`Your offer for "${item}" in BOT (held in escrow until accepted or cancelled)`);
-      if (amount) void queueTx("Offer", "BazaarOffers", "makeOffer", [owner, item], parseEther(amount));
+      if (amount) void busy(b, queueTx("Offer", "BazaarOffers", "makeOffer", [owner, item], parseEther(amount)));
     }),
   );
 }
@@ -389,7 +405,7 @@ async function viewProjects(el: HTMLElement) {
   $("#proj").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
-    void queueTx("Register project", "BazaarProjects", "register", [f.get("name"), f.get("uri") || ""]).then(render);
+    void busy((e as SubmitEvent).submitter, queueTx("Register project", "BazaarProjects", "register", [f.get("name"), f.get("uri") || ""])).then(render);
   });
 }
 
@@ -450,14 +466,14 @@ async function viewWorkshop(el: HTMLElement) {
   $("#design").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
-    void queueTx("Publish design", "PixelWorkshop", "register", [
+    void busy((e as SubmitEvent).submitter, queueTx("Publish design", "PixelWorkshop", "register", [
       f.get("name"), encodePixels(cells), encodePalette(slots), parseEther(String(f.get("price") || "0")),
-    ]).then(render);
+    ])).then(render);
   });
   el.querySelectorAll<HTMLButtonElement>("[data-collect]").forEach((b) =>
     b.addEventListener("click", () => {
       const [id, price] = b.dataset.collect!.split(":");
-      void queueTx("Collect", "PixelWorkshop", "collect", [BigInt(id)], BigInt(price)).then(render);
+      void busy(b, queueTx("Collect", "PixelWorkshop", "collect", [BigInt(id)], BigInt(price))).then(render);
     }),
   );
 }
@@ -519,16 +535,16 @@ async function viewAccount(el: HTMLElement) {
   el.querySelectorAll<HTMLButtonElement>("[data-act]").forEach((b) =>
     b.addEventListener("click", () => {
       const [fn, id] = b.dataset.act!.split(":");
-      void queueTx(fn[0].toUpperCase() + fn.slice(1), "BazaarMarket", fn, [BigInt(id)]).then(render);
+      void busy(b, queueTx(fn[0].toUpperCase() + fn.slice(1), "BazaarMarket", fn, [BigInt(id)])).then(render);
     }),
   );
   el.querySelectorAll<HTMLButtonElement>("[data-offer-accept]").forEach((b) =>
-    b.addEventListener("click", () => void queueTx("Accept offer", "BazaarOffers", "acceptOffer", [BigInt(b.dataset.offerAccept!)]).then(render)),
+    b.addEventListener("click", () => void busy(b, queueTx("Accept offer", "BazaarOffers", "acceptOffer", [BigInt(b.dataset.offerAccept!)])).then(render)),
   );
   $("#declare").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
-    void queueTx("Declare", "AgentPass", "declare", [Number(f.get("kind")), f.get("label") || ""]).then(render);
+    void busy((e as SubmitEvent).submitter, queueTx("Declare", "AgentPass", "declare", [Number(f.get("kind")), f.get("label") || ""])).then(render);
   });
   $("#shop").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -541,11 +557,11 @@ async function viewAccount(el: HTMLElement) {
         const i = l.lastIndexOf(",");
         return { name: l.slice(0, i).trim(), price: parseEther(l.slice(i + 1).trim()) };
       });
-    void queueTx("Open shop", "BazaarMarket", "openShop", [
+    void busy((e as SubmitEvent).submitter, queueTx("Open shop", "BazaarMarket", "openShop", [
       f.get("title"), f.get("uri") || "", Number(f.get("project") || 0), Number(f.get("cat")), items,
-    ]).then(render);
+    ])).then(render);
   });
-  document.getElementById("close-shop")?.addEventListener("click", () => void queueTx("Close shop", "BazaarMarket", "closeShop").then(render));
+  document.getElementById("close-shop")?.addEventListener("click", (e) => void busy(e.currentTarget, queueTx("Close shop", "BazaarMarket", "closeShop")).then(render));
 }
 
 // ---------- requests: the market in reverse ----------
@@ -614,13 +630,13 @@ async function viewRequests(el: HTMLElement) {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
     const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(f.get("days")) * 86400);
-    void queueTx("Post request", "BazaarRequests", "post", [f.get("title"), f.get("uri") || "", Number(f.get("wants")), deadline],
-      parseEther(String(f.get("reward")))).then(render);
+    void busy((e as SubmitEvent).submitter, queueTx("Post request", "BazaarRequests", "post", [f.get("title"), f.get("uri") || "", Number(f.get("wants")), deadline],
+      parseEther(String(f.get("reward"))))).then(render);
   });
   el.querySelectorAll<HTMLButtonElement>("[data-pitch]").forEach((b) =>
     b.addEventListener("click", () => {
       const note = prompt("Your pitch (the poster sees it on chain, 200 characters max)");
-      if (note !== null) void queueTx("Pitch", "BazaarRequests", "pitch", [BigInt(b.dataset.pitch!), note]);
+      if (note !== null) void busy(b, queueTx("Pitch", "BazaarRequests", "pitch", [BigInt(b.dataset.pitch!), note]));
     }),
   );
   el.querySelectorAll<HTMLButtonElement>("[data-req]").forEach((b) =>
@@ -637,7 +653,7 @@ async function viewRequests(el: HTMLElement) {
         if (!uri) return;
         args.push(uri);
       }
-      void queueTx(fn, "BazaarRequests", fn, args).then(render);
+      void busy(b, queueTx(fn, "BazaarRequests", fn, args)).then(render);
     }),
   );
 }
@@ -705,27 +721,37 @@ async function viewBotOrNot(el: HTMLElement) {
   el.querySelectorAll<HTMLButtonElement>("[data-guess]").forEach((b) =>
     b.addEventListener("click", () => {
       const [t, isBot] = b.dataset.guess!.split(":");
-      void queueTx("Guess", "BotOrNot", "guess", [t, isBot === "1"]).then(render);
+      void busy(b, queueTx("Guess", "BotOrNot", "guess", [t, isBot === "1"])).then(render);
     }),
   );
   el.querySelectorAll<HTMLButtonElement>("[data-forfeit]").forEach((b) =>
-    b.addEventListener("click", () => void queueTx("Forfeit", "BotOrNot", "forfeit", [b.dataset.forfeit]).then(render)),
+    b.addEventListener("click", () => void busy(b, queueTx("Forfeit", "BotOrNot", "forfeit", [b.dataset.forfeit])).then(render)),
   );
-  document.getElementById("claim")?.addEventListener("click", async () => {
+  document.getElementById("claim")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    if (btn.disabled) return;
+    btn.disabled = true;
     for (const x of claimable) await queueTx("Claim", "BotOrNot", "claim", [x!.trader, x!.round]).catch(() => undefined);
+    btn.disabled = false;
     void render();
   });
-  document.getElementById("enter")?.addEventListener("submit", async (e) => {
+  document.getElementById("enter")?.addEventListener("submit", (e) => {
     e.preventDefault();
+    // A fresh salt per press would make a second tap a different transaction (and overwrite the saved answer).
+    const btn = e.submitter as HTMLButtonElement | null;
+    if (btn?.disabled) return;
+    if (btn) btn.disabled = true;
     const isBot = new FormData(e.target as HTMLFormElement).get("bot") === "1";
     const salt = `0x${[...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
-    const commitment = await read<string>("BotOrNot", "commitmentOf", [me, isBot, salt]);
-    store.set(`bon-${me}`, JSON.stringify({ isBot, salt }));
-    void queueTx("Enter", "BotOrNot", "enter", [commitment]).then(render);
+    const sent = read<string>("BotOrNot", "commitmentOf", [me, isBot, salt]).then((commitment) => {
+      store.set(`bon-${me}`, JSON.stringify({ isBot, salt }));
+      return queueTx("Enter", "BotOrNot", "enter", [commitment]);
+    });
+    void busy(btn, sent).then(render);
   });
-  document.getElementById("reveal")?.addEventListener("click", () => {
+  document.getElementById("reveal")?.addEventListener("click", (e) => {
     const { isBot, salt } = JSON.parse(saved!);
-    void queueTx("Reveal", "BotOrNot", "reveal", [isBot, salt]).then(render);
+    void busy(e.currentTarget, queueTx("Reveal", "BotOrNot", "reveal", [isBot, salt])).then(render);
   });
 }
 
