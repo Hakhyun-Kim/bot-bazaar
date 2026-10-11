@@ -1,13 +1,14 @@
-// The bazaar as a place: a night market on BOT Chain where every open shop is a container stall
+// The bazaar as a place: a sunny cartoon market where every open shop is a striped-awning stall
 // with its owner behind the counter (a robot, a person, a person with a drone, or a hooded
-// undeclared trader), escrow glows in the middle, and the request board, Bot or Not stage, pixel
-// wall and project gate stand at the four streets. Walk with WASD / arrows or tap the ground; click
-// anything to trade. Everything shown here is read from the chain by main.ts and handed in as data.
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+// undeclared trader), parcels wait in the escrow lockers in the middle, and the request board,
+// Bot or Not puppet theatre, pixel easel and project gate stand on the paths. Walk with WASD /
+// arrows or tap the ground; click anything to trade. Everything shown is read from the chain by
+// main.ts and handed in as data.
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Html, Stars } from "@react-three/drei";
-import { Color, Group, InstancedMesh, Mesh, MeshBasicMaterial, Object3D, Vector3 } from "three";
+import { Html, Outlines } from "@react-three/drei";
+import { Color, DataTexture, Group, InstancedMesh, Mesh, MeshBasicMaterial, NearestFilter, Object3D, RedFormat, Vector3 } from "three";
 import { PRESET16, decodePixels } from "../pixel";
 
 export type Tab = "requests" | "botornot" | "workshop" | "projects" | "account";
@@ -41,26 +42,53 @@ export interface WorldApi {
 const EMPTY: WorldData = {
   me: null, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs: [], projects: [], purchases: 0,
 };
-/** Category colours: goods, services, developer assets, agent services */
-const CAT = ["#ff9f43", "#4dabff", "#4ee39b", "#c084fc"];
+/** Awning colours by category: goods, services, developer assets, agent services */
+const CAT = ["#ff8a5c", "#4fa8ff", "#5ccf7a", "#b98cff"];
 const CAT_NAME = ["Goods", "Service", "Dev asset", "Agent service"];
+const INK = "#3a2e3f";
+const WOOD = "#c98b52";
+const WOOD_DARK = "#8a5a35";
+const CREAM = "#fff6e6";
+const GOODS = ["#ffd166", "#ef476f", "#06d6a0", "#118ab2", "#ff9f1c"];
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const hue = (a: string) => {
   let h = 0;
   for (let i = 2; i < a.length; i++) h = (h * 31 + a.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360} 70% 58%)`;
+  return `hsl(${h % 360} 75% 64%)`;
 };
+
+/** Three flat bands of light: the cartoon look comes from this plus ink outlines. */
+const GRAD = (() => {
+  const t = new DataTexture(new Uint8Array([90, 175, 255]), 3, 1, RedFormat);
+  t.minFilter = t.magFilter = NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+
+type V3 = [number, number, number];
+/** One cartoon part: geometry as the child, toon paint and an ink outline. */
+function P({ children, color, position, rotation, scale, line = 0.03 }: {
+  children: ReactNode; color: string; position?: V3; rotation?: V3; scale?: V3 | number; line?: number;
+}) {
+  return (
+    <mesh position={position} rotation={rotation} scale={scale}>
+      {children}
+      <meshToonMaterial color={color} gradientMap={GRAD} />
+      {line ? <Outlines thickness={line} color={INK} /> : null}
+    </mesh>
+  );
+}
 
 // ---------- layout: one table for drawing, clicking, colliding and "press F" ----------
 const LANDMARK = {
-  core: { x: 0, z: 0, r: 2.4 },
+  core: { x: 0, z: 0, r: 2.3 },
   board: { x: 0, z: -18, r: 2.4 },
-  stage: { x: 18, z: 0, r: 3.4 },
-  wall: { x: -18, z: 0, r: 2.6 },
+  stage: { x: 18, z: 0, r: 2.8 },
+  wall: { x: -18, z: 0, r: 2 },
   gate: { x: 0, z: -27, r: 0 },
 };
 const WORLD_R = 28;
-/** Stall slots on two rings, leaving the four streets to the landmarks clear. */
+/** Stall slots on two rings, leaving the four paths to the landmarks clear. */
 const SLOTS: { x: number; z: number; rot: number }[] = (() => {
   const out: { x: number; z: number; rot: number }[] = [];
   const add = (deg: number, r: number) => {
@@ -73,6 +101,12 @@ const SLOTS: { x: number; z: number; rot: number }[] = (() => {
   for (const d of [33, 327, 57, 303, 123, 237, 147, 213]) add(d, 15.5);
   return out;
 })();
+/** Trees around the edge, placed by a fixed rule so they never move between visits. */
+const TREES = Array.from({ length: 26 }, (_, i) => {
+  const a = (i / 26) * Math.PI * 2 + (i % 3) * 0.07;
+  const r = 21.5 + ((i * 7) % 5);
+  return { x: Math.sin(a) * r, z: -Math.cos(a) * r, s: 0.9 + ((i * 13) % 7) / 10, kind: i % 3 };
+}).filter((t) => Math.abs(t.x) > 3 && Math.abs(t.z) > 3); // keep the paths open
 
 // ---------- data store shared with main.ts ----------
 let data: WorldData = EMPTY;
@@ -90,119 +124,123 @@ interface Spot {
   z: number;
   r: number;
   name: string;
-  target: Target;
+  target: Target | null;
 }
 
-// ---------- figures ----------
-function Robot({ color }: { color: string }) {
-  const head = useRef<Group>(null);
-  const seed = useMemo(() => Math.random() * 10, []);
-  useFrame(({ clock }) => {
-    if (head.current) head.current.rotation.y = Math.sin(clock.elapsedTime * 0.8 + seed) * 0.4;
-  });
+// ---------- figures (chibi: big heads, small bodies) ----------
+function Eyes({ z, y = 0, gap = 0.1, size = 0.045 }: { z: number; y?: number; gap?: number; size?: number }) {
   return (
-    <group>
-      {[-0.15, 0.15].map((x) => (
-        <mesh key={x} position={[x, 0.22, 0]}>
-          <boxGeometry args={[0.16, 0.44, 0.18]} />
-          <meshStandardMaterial color="#3a3f52" metalness={0.6} roughness={0.4} />
+    <>
+      {[-gap, gap].map((x) => (
+        <mesh key={x} position={[x, y, z]}>
+          <sphereGeometry args={[size, 10, 10]} />
+          <meshBasicMaterial color={INK} />
         </mesh>
       ))}
-      <mesh position={[0, 0.78, 0]}>
-        <boxGeometry args={[0.62, 0.66, 0.42]} />
-        <meshStandardMaterial color={color} metalness={0.5} roughness={0.35} />
+    </>
+  );
+}
+
+function useBob(speed = 1.6, height = 0.05) {
+  const ref = useRef<Group>(null);
+  const seed = useMemo(() => Math.random() * 10, []);
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.position.y = Math.abs(Math.sin(clock.elapsedTime * speed + seed)) * height;
+  });
+  return ref;
+}
+
+function Robot({ color }: { color: string }) {
+  const bob = useBob(2.2, 0.06);
+  return (
+    <group ref={bob}>
+      {[-0.14, 0.14].map((x) => (
+        <P key={x} color="#8d95a8" position={[x, 0.16, 0]}><cylinderGeometry args={[0.08, 0.1, 0.32, 10]} /></P>
+      ))}
+      <P color={color} position={[0, 0.58, 0]}><boxGeometry args={[0.6, 0.55, 0.45]} /></P>
+      {[-0.38, 0.38].map((x) => (
+        <P key={x} color="#8d95a8" position={[x, 0.6, 0]} rotation={[0, 0, x > 0 ? -0.5 : 0.5]}><cylinderGeometry args={[0.05, 0.05, 0.36, 8]} /></P>
+      ))}
+      <P color="#eef1f7" position={[0, 1.18, 0]}><boxGeometry args={[0.78, 0.62, 0.6]} /></P>
+      <mesh position={[0, 1.18, 0.305]}>
+        <planeGeometry args={[0.58, 0.4]} />
+        <meshBasicMaterial color="#2c3550" />
       </mesh>
-      <mesh position={[0, 0.82, 0.215]}>
-        <boxGeometry args={[0.3, 0.14, 0.02]} />
-        <meshStandardMaterial color="#111" emissive={color} emissiveIntensity={0.9} />
+      {[-0.13, 0.13].map((x) => (
+        <mesh key={x} position={[x, 1.21, 0.31]}>
+          <circleGeometry args={[0.07, 16]} />
+          <meshBasicMaterial color="#8ff0ff" />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.08, 0.31]}>
+        <planeGeometry args={[0.16, 0.035]} />
+        <meshBasicMaterial color="#8ff0ff" />
       </mesh>
-      <group ref={head} position={[0, 1.36, 0]}>
-        <mesh>
-          <boxGeometry args={[0.52, 0.42, 0.44]} />
-          <meshStandardMaterial color="#1c2030" metalness={0.4} roughness={0.3} />
-        </mesh>
-        {[-0.11, 0.11].map((x) => (
-          <mesh key={x} position={[x, 0.03, 0.225]}>
-            <boxGeometry args={[0.1, 0.07, 0.01]} />
-            <meshBasicMaterial color="#7ff5ff" />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.34, 0]}>
-          <cylinderGeometry args={[0.02, 0.02, 0.26, 6]} />
-          <meshStandardMaterial color="#888" />
-        </mesh>
-        <mesh position={[0, 0.5, 0]}>
-          <sphereGeometry args={[0.06, 10, 10]} />
-          <meshBasicMaterial color={color} />
-        </mesh>
-      </group>
+      <P color="#8d95a8" position={[0, 1.6, 0]}><cylinderGeometry args={[0.025, 0.025, 0.24, 6]} /></P>
+      <P color={color} position={[0, 1.75, 0]}><sphereGeometry args={[0.08, 12, 12]} /></P>
     </group>
   );
 }
 
 function Human({ color }: { color: string }) {
-  const body = useRef<Group>(null);
-  const seed = useMemo(() => Math.random() * 10, []);
-  useFrame(({ clock }) => {
-    if (body.current) body.current.position.y = Math.abs(Math.sin(clock.elapsedTime * 1.6 + seed)) * 0.04;
-  });
+  const bob = useBob();
   return (
-    <group ref={body}>
-      <mesh position={[0, 0.72, 0]}>
-        <capsuleGeometry args={[0.26, 0.6, 6, 12]} />
-        <meshStandardMaterial color={color} roughness={0.8} />
+    <group ref={bob}>
+      <P color={color} position={[0, 0.42, 0]}><cylinderGeometry args={[0.2, 0.32, 0.72, 16]} /></P>
+      <P color="#ffd7b5" position={[0, 1.12, 0]}><sphereGeometry args={[0.36, 20, 20]} /></P>
+      <P color="#5a3a2a" position={[0, 1.22, -0.03]} scale={[1.06, 0.82, 1.06]}>
+        <sphereGeometry args={[0.36, 20, 20, 0, Math.PI * 2, 0, Math.PI / 2]} />
+      </P>
+      <Eyes z={0.33} y={1.1} gap={0.12} size={0.05} />
+      <mesh position={[0, 1.0, 0.33]}>
+        <circleGeometry args={[0.05, 12, Math.PI, Math.PI]} />
+        <meshBasicMaterial color={INK} />
       </mesh>
-      <mesh position={[0, 1.4, 0]}>
-        <sphereGeometry args={[0.23, 16, 16]} />
-        <meshStandardMaterial color="#e9c39f" roughness={0.9} />
-      </mesh>
-      <mesh position={[0, 1.47, -0.02]} scale={[1.05, 0.75, 1.05]}>
-        <sphereGeometry args={[0.23, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color="#2b2118" roughness={1} />
-      </mesh>
+      {[-0.2, 0.2].map((x) => (
+        <mesh key={x} position={[x, 1.03, 0.3]}>
+          <circleGeometry args={[0.05, 12]} />
+          <meshBasicMaterial color="#ff9fae" transparent opacity={0.7} />
+        </mesh>
+      ))}
     </group>
   );
 }
 
 function Drone({ color }: { color: string }) {
   const g = useRef<Group>(null);
-  useFrame(({ clock }) => {
+  const blade = useRef<Mesh>(null);
+  useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime;
-    if (g.current) g.current.position.set(0.55 + Math.sin(t) * 0.1, 1.75 + Math.sin(t * 2.3) * 0.08, Math.cos(t) * 0.1);
+    if (g.current) g.current.position.set(0.6 + Math.sin(t) * 0.1, 1.75 + Math.sin(t * 2.3) * 0.08, Math.cos(t) * 0.1);
+    if (blade.current) blade.current.rotation.y += dt * 20;
   });
   return (
     <group ref={g}>
-      <mesh>
-        <sphereGeometry args={[0.13, 12, 12]} />
-        <meshStandardMaterial color="#1c2030" metalness={0.6} />
-      </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.2, 0.025, 6, 20]} />
-        <meshBasicMaterial color={color} />
+      <P color={color}><sphereGeometry args={[0.15, 14, 14]} /></P>
+      <Eyes z={0.13} gap={0.05} size={0.025} />
+      <P color="#eef1f7" position={[0, 0.17, 0]}><cylinderGeometry args={[0.015, 0.015, 0.1, 6]} /></P>
+      <mesh ref={blade} position={[0, 0.22, 0]}>
+        <boxGeometry args={[0.42, 0.015, 0.05]} />
+        <meshBasicMaterial color={INK} />
       </mesh>
     </group>
   );
 }
 
-function Hooded({ cloak = "#262938" }: { cloak?: string }) {
+function Hooded({ cloak = "#8f84b3" }: { cloak?: string }) {
+  const bob = useBob(1.2, 0.04);
   return (
-    <group>
-      <mesh position={[0, 0.7, 0]}>
-        <coneGeometry args={[0.42, 1.4, 14]} />
-        <meshStandardMaterial color={cloak} roughness={1} />
+    <group ref={bob}>
+      <P color={cloak} position={[0, 0.5, 0]}><coneGeometry args={[0.42, 1.0, 16]} /></P>
+      <P color={cloak} position={[0, 1.12, 0]}><sphereGeometry args={[0.38, 18, 18]} /></P>
+      <mesh position={[0, 1.08, 0.24]} scale={[1, 0.9, 0.5]}>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <meshBasicMaterial color="#2f2840" />
       </mesh>
-      <mesh position={[0, 1.38, 0]}>
-        <sphereGeometry args={[0.27, 14, 14]} />
-        <meshStandardMaterial color={cloak} roughness={1} />
-      </mesh>
-      <mesh position={[0, 1.36, 0.2]}>
-        <sphereGeometry args={[0.15, 12, 12]} />
-        <meshBasicMaterial color="#05060a" />
-      </mesh>
-      {[-0.06, 0.06].map((x) => (
-        <mesh key={x} position={[x, 1.38, 0.33]}>
-          <sphereGeometry args={[0.025, 6, 6]} />
-          <meshBasicMaterial color="#ffd66b" />
+      {[-0.09, 0.09].map((x) => (
+        <mesh key={x} position={[x, 1.1, 0.375]}>
+          <circleGeometry args={[0.055, 14]} />
+          <meshBasicMaterial color="#ffffff" />
         </mesh>
       ))}
     </group>
@@ -215,7 +253,7 @@ export function Trader({ kind, address, you }: { kind: number; address: string; 
   if (kind === 2) return <Robot color={color} />;
   if (kind === 1) return <Human color={color} />;
   if (kind === 3) return (<group><Human color={color} /><Drone color={color} /></group>);
-  return <Hooded cloak={you ? "#2f7d99" : undefined} />;
+  return <Hooded cloak={you ? "#4cc3d9" : undefined} />;
 }
 
 // ---------- places ----------
@@ -230,51 +268,54 @@ function clickable(open: () => void) {
   };
 }
 
+/** Striped awning — the shape every stall shares. */
+function Awning({ color, width = 3 }: { color: string; width?: number }) {
+  const n = 6;
+  const w = width / n;
+  return (
+    <group position={[0, 2.35, 0.1]} rotation={[0.35, 0, 0]}>
+      {Array.from({ length: n }, (_, i) => (
+        <P key={i} color={i % 2 ? CREAM : color} position={[-width / 2 + w / 2 + i * w, 0, 0]} line={0.02}>
+          <boxGeometry args={[w, 0.08, 1.9]} />
+        </P>
+      ))}
+      {Array.from({ length: n }, (_, i) => (
+        <P key={`s${i}`} color={i % 2 ? CREAM : color} position={[-width / 2 + w / 2 + i * w, -0.04, 0.95]} rotation={[0, 0, Math.PI]} line={0.02}>
+          <cylinderGeometry args={[w / 2, w / 2, 0.08, 12, 1, false, Math.PI / 2, Math.PI]} />
+        </P>
+      ))}
+    </group>
+  );
+}
+
 function Stall({ shop, slot, open }: { shop: WorldShop; slot: (typeof SLOTS)[number]; open: (t: Target) => void }) {
-  const neon = CAT[shop.category] ?? CAT[0];
+  const color = CAT[shop.category] ?? CAT[0];
   return (
     <group position={[slot.x, 0, slot.z]} rotation={[0, slot.rot, 0]} {...clickable(() => open({ kind: "shop", owner: shop.owner }))}>
-      <mesh position={[0, 0.05, 0]}>
-        <boxGeometry args={[3, 0.1, 2.2]} />
-        <meshStandardMaterial color="#232736" />
-      </mesh>
-      <mesh position={[0, 1.2, -1]}>
-        <boxGeometry args={[3, 2.4, 0.1]} />
-        <meshStandardMaterial color="#2c3245" metalness={0.3} roughness={0.6} />
-      </mesh>
-      {[-1.45, 1.45].map((x) => (
-        <mesh key={x} position={[x, 1.2, -0.05]}>
-          <boxGeometry args={[0.1, 2.4, 2]} />
-          <meshStandardMaterial color="#2c3245" metalness={0.3} roughness={0.6} />
-        </mesh>
+      {[-1.35, 1.35].map((x) => (
+        <P key={x} color={WOOD_DARK} position={[x, 1.2, -0.7]}><cylinderGeometry args={[0.08, 0.09, 2.4, 10]} /></P>
       ))}
-      <mesh position={[0, 2.45, -0.05]}>
-        <boxGeometry args={[3.1, 0.14, 2.2]} />
-        <meshStandardMaterial color="#1b1f2c" />
-      </mesh>
-      <mesh position={[0, 2.36, 1.06]}>
-        <boxGeometry args={[3.1, 0.06, 0.06]} />
-        <meshBasicMaterial color={neon} />
-      </mesh>
-      <mesh position={[0, 0.5, 0.75]}>
-        <boxGeometry args={[2.7, 0.9, 0.45]} />
-        <meshStandardMaterial color="#3a4157" />
-      </mesh>
-      <mesh position={[0, 0.94, 0.98]}>
-        <boxGeometry args={[2.7, 0.04, 0.02]} />
-        <meshBasicMaterial color={neon} />
-      </mesh>
-      {shop.items.slice(0, 3).map((it, i) => (
-        <mesh key={i} position={[-0.8 + i * 0.8, 1.08, 0.75]} rotation={[0, i, 0]}>
-          <boxGeometry args={[0.26, 0.26, 0.26]} />
-          <meshStandardMaterial color={neon} emissive={neon} emissiveIntensity={0.5} />
-        </mesh>
+      {[-1.35, 1.35].map((x) => (
+        <P key={`f${x}`} color={WOOD_DARK} position={[x, 1.1, 0.95]}><cylinderGeometry args={[0.07, 0.08, 2.2, 10]} /></P>
       ))}
-      <group position={[0, 0.05, -0.35]}>
+      <Awning color={color} />
+      <P color={WOOD} position={[0, 0.48, 0.7]}><boxGeometry args={[2.8, 0.96, 0.6]} /></P>
+      <P color={color} position={[0, 0.55, 1.01]} line={0.015}><boxGeometry args={[1.6, 0.4, 0.02]} /></P>
+      {shop.items.slice(0, 3).map((_, i) => (
+        <group key={i} position={[-0.85 + i * 0.85, 1.07, 0.7]}>
+          <P color="#e9b872" line={0.02}><cylinderGeometry args={[0.24, 0.18, 0.14, 14]} /></P>
+          {[0, 1, 2].map((k) => (
+            <P key={k} color={GOODS[(i * 3 + k) % GOODS.length]} position={[(k - 1) * 0.1, 0.12 + (k === 1 ? 0.08 : 0), (k % 2) * 0.05]} line={0.015}>
+              <sphereGeometry args={[0.09, 12, 12]} />
+            </P>
+          ))}
+        </group>
+      ))}
+      <group position={[0, 0, -0.2]}>
         <Trader kind={shop.kind} address={shop.owner} />
       </group>
-      <Html position={[0, 3.05, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-        <div className="w-sign" style={{ borderColor: neon }}>
+      <Html position={[0, 3.25, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+        <div className="w-sign" style={{ borderTopColor: color }}>
           <b>{shop.title}</b>
           <span>
             {["❓", "🧑", "🤖", "🧑🤖"][shop.kind] ?? "❓"} {shop.kind ? shop.label || short(shop.owner) : "bot or not?"} · {CAT_NAME[shop.category]}
@@ -288,19 +329,13 @@ function Stall({ shop, slot, open }: { shop: WorldShop; slot: (typeof SLOTS)[num
 function EmptyStall({ slot, open }: { slot: (typeof SLOTS)[number]; open: (t: Target) => void }) {
   return (
     <group position={[slot.x, 0, slot.z]} rotation={[0, slot.rot, 0]} {...clickable(() => open({ kind: "tab", tab: "account" }))}>
-      <mesh position={[0, 0.05, 0]}>
-        <boxGeometry args={[3, 0.1, 2.2]} />
-        <meshStandardMaterial color="#232736" />
-      </mesh>
-      <mesh position={[0, 1.2, 0]}>
-        <boxGeometry args={[3, 2.4, 2.2]} />
-        <meshStandardMaterial color="#7ff5ff" transparent opacity={0.08} />
-      </mesh>
-      <mesh position={[0, 0.12, 1.06]}>
-        <boxGeometry args={[3, 0.04, 0.04]} />
-        <meshBasicMaterial color="#7ff5ff" />
-      </mesh>
-      <Html position={[0, 2.2, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+      {[-1.35, 1.35].map((x) => (
+        <P key={x} color={WOOD_DARK} position={[x, 1.2, -0.7]}><cylinderGeometry args={[0.08, 0.09, 2.4, 10]} /></P>
+      ))}
+      <Awning color="#d9d2c3" />
+      <P color={WOOD} position={[0, 0.48, 0.7]}><boxGeometry args={[2.8, 0.96, 0.6]} /></P>
+      <P color={CREAM} position={[0, 1.4, -0.68]} line={0.02}><boxGeometry args={[1.4, 0.7, 0.05]} /></P>
+      <Html position={[0, 3.1, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-sign free">
           <b>Free stall</b>
           <span>open your shop here</span>
@@ -310,56 +345,49 @@ function EmptyStall({ slot, open }: { slot: (typeof SLOTS)[number]; open: (t: Ta
   );
 }
 
-function EscrowCore() {
+/** Escrow as a parcel locker: paid goods wait in a box until the buyer says OK. */
+function EscrowLockers() {
   const d = useData();
-  const gem = useRef<Mesh>(null);
-  const ring = useRef<Group>(null);
-  useFrame(({ clock }, dt) => {
+  const parcel = useRef<Group>(null);
+  useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    if (gem.current) {
-      gem.current.rotation.y += dt * 0.6;
-      gem.current.position.y = 2.6 + Math.sin(t * 1.3) * 0.15;
+    if (parcel.current) {
+      parcel.current.position.y = 3.35 + Math.sin(t * 2) * 0.12;
+      parcel.current.rotation.y = Math.sin(t * 0.8) * 0.4;
     }
-    if (ring.current) ring.current.rotation.y -= dt * 0.9;
   });
+  const doors: V3[] = [];
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) doors.push([-0.85 + c * 0.85, 0.75 + r * 0.8, 1.06]);
   return (
     <group>
-      <mesh position={[0, 0.4, 0]}>
-        <cylinderGeometry args={[2.2, 2.5, 0.8, 8]} />
-        <meshStandardMaterial color="#20253a" metalness={0.5} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, 0.81, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[1.6, 1.75, 8]} />
-        <meshBasicMaterial color="#ffd66b" />
-      </mesh>
-      <mesh ref={gem} position={[0, 2.6, 0]}>
-        <octahedronGeometry args={[0.9, 0]} />
-        <meshStandardMaterial color="#ffc94a" emissive="#ffb000" emissiveIntensity={1.1} metalness={0.6} roughness={0.2} />
-      </mesh>
-      <group ref={ring} position={[0, 2.6, 0]}>
-        {Array.from({ length: 8 }, (_, i) => {
-          const a = (i / 8) * Math.PI * 2;
-          return (
-            <mesh key={i} position={[Math.cos(a) * 1.7, Math.sin(a * 2) * 0.25, Math.sin(a) * 1.7]} rotation={[Math.PI / 2, 0, a]}>
-              <cylinderGeometry args={[0.17, 0.17, 0.05, 16]} />
-              <meshStandardMaterial color="#ffd66b" emissive="#ffb000" emissiveIntensity={0.6} metalness={0.8} roughness={0.2} />
-            </mesh>
-          );
-        })}
+      <P color="#e8d6b0" position={[0, 0.1, 0]}><cylinderGeometry args={[2.3, 2.4, 0.2, 24]} /></P>
+      <P color="#7cc6f2" position={[0, 1.15, 0]}><boxGeometry args={[3, 2, 2]} /></P>
+      <P color="#ff8fa3" position={[0, 2.55, 0]} rotation={[0, Math.PI / 4, 0]}><coneGeometry args={[2.35, 0.9, 4]} /></P>
+      {doors.map((p, i) => (
+        <group key={i} position={p}>
+          <P color={i === 1 || i === 3 ? "#ffe08a" : CREAM} line={0.02}><boxGeometry args={[0.7, 0.64, 0.08]} /></P>
+          <P color="#ff8fa3" position={[0.22, 0, 0.06]} line={0}><sphereGeometry args={[0.05, 8, 8]} /></P>
+        </group>
+      ))}
+      <group ref={parcel} position={[0, 3.35, 0]}>
+        <P color="#d9a066"><boxGeometry args={[0.7, 0.55, 0.7]} /></P>
+        <P color="#ef476f" line={0}><boxGeometry args={[0.72, 0.57, 0.14]} /></P>
+        <P color="#ef476f" line={0}><boxGeometry args={[0.14, 0.57, 0.72]} /></P>
+        <P color="#ef476f" position={[-0.12, 0.33, 0]} rotation={[0, 0, 0.6]} line={0.015}><torusGeometry args={[0.1, 0.04, 8, 16]} /></P>
+        <P color="#ef476f" position={[0.12, 0.33, 0]} rotation={[0, 0, -0.6]} line={0.015}><torusGeometry args={[0.1, 0.04, 8, 16]} /></P>
       </group>
-      <pointLight position={[0, 3, 0]} color="#ffb84a" intensity={30} distance={16} />
       <Pulses />
       <Html position={[0, 4.4, 0]} center distanceFactor={15} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-sign core">
-          <b>Escrow core</b>
-          <span>{d.purchases} purchase{d.purchases === 1 ? "" : "s"} held until the buyer is happy</span>
+          <b>📦 Escrow lockers</b>
+          <span>{d.purchases} order{d.purchases === 1 ? "" : "s"} · paid out when the buyer is happy</span>
         </div>
       </Html>
     </group>
   );
 }
 
-/** A ring of light from the core for every confirmed transaction. */
+/** A coloured ring from the lockers for every confirmed transaction. */
 function Pulses() {
   const n = usePulses();
   const [rings, setRings] = useState<number[]>([]);
@@ -369,22 +397,22 @@ function Pulses() {
     const id = setTimeout(() => setRings((r) => r.filter((x) => x !== n)), 1600);
     return () => clearTimeout(id);
   }, [n]);
-  return <>{rings.map((id) => <PulseRing key={id} />)}</>;
+  return <>{rings.map((id) => <PulseRing key={id} color={GOODS[id % GOODS.length]} />)}</>;
 }
-function PulseRing() {
+function PulseRing({ color }: { color: string }) {
   const m = useRef<Mesh>(null);
   const t0 = useRef<number | null>(null);
   useFrame(({ clock }) => {
     if (!m.current) return;
     t0.current ??= clock.elapsedTime;
     const t = (clock.elapsedTime - t0.current) / 1.5;
-    m.current.scale.setScalar(1 + t * 14);
-    (m.current.material as MeshBasicMaterial).opacity = Math.max(0, 0.8 * (1 - t));
+    m.current.scale.setScalar(1 + t * 10);
+    (m.current.material as MeshBasicMaterial).opacity = Math.max(0, 0.9 * (1 - t));
   });
   return (
-    <mesh ref={m} position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[1.4, 1.6, 48]} />
-      <meshBasicMaterial color="#ffd66b" transparent opacity={0.8} />
+    <mesh ref={m} position={[0, 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[2.3, 2.6, 48]} />
+      <meshBasicMaterial color={color} transparent opacity={0.9} />
     </mesh>
   );
 }
@@ -394,61 +422,58 @@ function RequestBoard({ open }: { open: (t: Target) => void }) {
   const { x, z } = LANDMARK.board;
   return (
     <group position={[x, 0, z]} {...clickable(() => open({ kind: "tab", tab: "requests" }))}>
-      {[-2.2, 2.2].map((px) => (
-        <mesh key={px} position={[px, 2, 0]}>
-          <boxGeometry args={[0.2, 4, 0.2]} />
-          <meshStandardMaterial color="#2c3245" metalness={0.5} />
-        </mesh>
+      {[-2.1, 2.1].map((px) => (
+        <P key={px} color={WOOD_DARK} position={[px, 1.9, 0]}><boxGeometry args={[0.24, 3.8, 0.24]} /></P>
       ))}
-      <mesh position={[0, 2.6, 0]}>
-        <boxGeometry args={[4.4, 2.8, 0.08]} />
-        <meshStandardMaterial color="#0d2a3a" emissive="#0a3550" emissiveIntensity={0.8} transparent opacity={0.85} />
-      </mesh>
-      <Html position={[0, 2.6, 0.1]} center transform distanceFactor={4} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+      <P color={WOOD} position={[0, 2.55, -0.04]}><boxGeometry args={[4.4, 2.9, 0.14]} /></P>
+      <P color="#e6b980" position={[0, 2.55, 0.04]} line={0}><boxGeometry args={[4.0, 2.5, 0.04]} /></P>
+      <P color="#ff8fa3" position={[0, 4.2, 0]}><boxGeometry args={[4.8, 0.3, 0.5]} /></P>
+      <Html position={[0, 2.55, 0.1]} center transform distanceFactor={4} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-board">
           <h4>📋 Request board</h4>
           {d.requests.slice(0, 4).map((r, i) => (
-            <p key={i}>
+            <p key={i} style={{ transform: `rotate(${((i * 37) % 5) - 2}deg)` }}>
               <span>{["Anyone", "Humans", "Bots"][r.wants]}</span> {r.title} <b>{r.reward}</b>
             </p>
           ))}
-          {!d.requests.length && <p>No open requests. Post the first.</p>}
+          {!d.requests.length && <p>No open requests. Post the first!</p>}
         </div>
       </Html>
     </group>
   );
 }
 
+/** Bot or Not as a puppet theatre: the hooded trader on stage, the crowd guesses. */
 function BotOrNotStage({ open }: { open: (t: Target) => void }) {
   const d = useData();
   const { x, z } = LANDMARK.stage;
   const live = d.rounds[0];
-  const spin = useRef<Group>(null);
-  useFrame((_, dt) => {
-    if (spin.current) spin.current.rotation.y += dt * 0.5;
+  const q = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (q.current) q.current.rotation.y = Math.sin(clock.elapsedTime * 1.5) * 0.5;
   });
   return (
     <group position={[x, 0, z]} rotation={[0, -Math.PI / 2, 0]} {...clickable(() => open({ kind: "tab", tab: "botornot" }))}>
-      <mesh position={[0, 0.3, 0]}>
-        <cylinderGeometry args={[3, 3.2, 0.6, 32]} />
-        <meshStandardMaterial color="#3a1f45" />
-      </mesh>
-      <mesh position={[0, 0.61, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2.7, 2.85, 48]} />
-        <meshBasicMaterial color="#ff5fd2" />
-      </mesh>
-      <mesh position={[0, 3.6, 0]}>
-        <coneGeometry args={[1.6, 6, 24, 1, true]} />
-        <meshBasicMaterial color="#fff2c4" transparent opacity={0.08} depthWrite={false} />
-      </mesh>
-      <group ref={spin} position={[0, 0.6, 0]}>
-        {live ? <Hooded /> : null}
+      <P color="#ffd166" position={[0, 0.45, 0]}><boxGeometry args={[4, 0.9, 2.4]} /></P>
+      <P color="#b5651d" position={[0, 0.92, 0]} line={0.02}><boxGeometry args={[3.8, 0.06, 2.2]} /></P>
+      {[-1.85, 1.85].map((px) => (
+        <P key={px} color="#ef476f" position={[px, 2.0, -0.6]}><boxGeometry args={[0.3, 2.2, 1.1]} /></P>
+      ))}
+      {[-1.4, 1.4].map((px) => (
+        <P key={`c${px}`} color="#d63a5c" position={[px, 2.0, -0.2]} scale={[1, 1, 0.4]}><cylinderGeometry args={[0.35, 0.5, 2.2, 12]} /></P>
+      ))}
+      <P color="#ef476f" position={[0, 3.25, -0.6]}><boxGeometry args={[4.2, 0.6, 1.2]} /></P>
+      <P color="#6c4f9c" position={[0, 2.0, -1.1]} line={0.02}><boxGeometry args={[3.5, 2.2, 0.1]} /></P>
+      <group position={[0, 0.95, -0.2]}>{live ? <Hooded /> : null}</group>
+      <group ref={q} position={[0, 4.3, -0.6]}>
+        <P color="#ffd166" position={[0, 0.2, 0]} rotation={[0, 0, -0.6]}><torusGeometry args={[0.28, 0.1, 10, 20, Math.PI * 1.4]} /></P>
+        <P color="#ffd166" position={[0, -0.45, 0]}><sphereGeometry args={[0.1, 10, 10]} /></P>
       </group>
-      <Html position={[0, 3.2, 0]} center distanceFactor={14} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+      <Html position={[0, 5.3, -0.6]} center distanceFactor={14} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-sign stage">
           <b>🎭 Bot or Not</b>
           <span>
-            {live ? `${short(live.trader)} · 🤖 ${live.bot} · 🧑 ${live.human}` : "Stage is free. Enter a round."}
+            {live ? `${short(live.trader)} · 🤖 ${live.bot} · 🧑 ${live.human}` : "Stage is free. Enter a round!"}
             {d.rounds.length > 1 ? ` · +${d.rounds.length - 1} more` : ""}
           </span>
         </div>
@@ -457,7 +482,8 @@ function BotOrNotStage({ open }: { open: (t: Target) => void }) {
   );
 }
 
-function PixelWall({ open }: { open: (t: Target) => void }) {
+/** A painter's easel showing the on-chain designs one after another. */
+function PixelEasel({ open }: { open: (t: Target) => void }) {
   const d = useData();
   const { x, z } = LANDMARK.wall;
   const mesh = useRef<InstancedMesh>(null);
@@ -475,11 +501,11 @@ function PixelWall({ open }: { open: (t: Target) => void }) {
     const c = new Color();
     const cells = design ? decodePixels(design.pixels) : new Array<number>(64).fill(0);
     cells.forEach((v, k) => {
-      o.position.set(((k % 8) - 3.5) * 0.42, (3.5 - Math.floor(k / 8)) * 0.42, 0);
+      o.position.set(((k % 8) - 3.5) * 0.34, (3.5 - Math.floor(k / 8)) * 0.34, 0);
       o.updateMatrix();
       m.setMatrixAt(k, o.matrix);
       const hex = design ? PRESET16[(design.palette >> (12 - 4 * v)) & 15] : "#00000000";
-      c.set(hex === "#00000000" ? "#151826" : hex.slice(0, 7));
+      c.set(hex === "#00000000" ? "#fffdf6" : hex.slice(0, 7));
       m.setColorAt(k, c);
     });
     m.instanceMatrix.needsUpdate = true;
@@ -487,21 +513,23 @@ function PixelWall({ open }: { open: (t: Target) => void }) {
   }, [design]);
   return (
     <group position={[x, 0, z]} rotation={[0, Math.PI / 2, 0]} {...clickable(() => open({ kind: "tab", tab: "workshop" }))}>
-      <mesh position={[0, 2.7, -0.15]}>
-        <boxGeometry args={[3.8, 3.8, 0.2]} />
-        <meshStandardMaterial color="#1b1f2c" />
-      </mesh>
-      {[-1.7, 1.7].map((px) => (
-        <mesh key={px} position={[px, 0.8, -0.15]}>
-          <boxGeometry args={[0.2, 1.6, 0.2]} />
-          <meshStandardMaterial color="#2c3245" />
-        </mesh>
+      {[-0.9, 0.9].map((px) => (
+        <P key={px} color={WOOD_DARK} position={[px, 1.7, -0.1]} rotation={[0, 0, px > 0 ? -0.12 : 0.12]}><cylinderGeometry args={[0.07, 0.08, 3.6, 8]} /></P>
       ))}
-      <instancedMesh ref={mesh} args={[undefined, undefined, 64]} position={[0, 2.7, 0]}>
-        <boxGeometry args={[0.38, 0.38, 0.12]} />
+      <P color={WOOD_DARK} position={[0, 1.5, -0.7]} rotation={[0.35, 0, 0]}><cylinderGeometry args={[0.06, 0.07, 3.2, 8]} /></P>
+      <P color={WOOD} position={[0, 1.0, 0.1]}><boxGeometry args={[2.4, 0.14, 0.3]} /></P>
+      <P color={CREAM} position={[0, 2.45, 0]}><boxGeometry args={[3.0, 3.0, 0.12]} /></P>
+      <instancedMesh ref={mesh} args={[undefined, undefined, 64]} position={[0, 2.45, 0.08]}>
+        <boxGeometry args={[0.33, 0.33, 0.04]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
-      <Html position={[0, 5.1, 0]} center distanceFactor={14} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+      <group position={[1.5, 0.2, 0.9]}>
+        <P color="#f2f2f2"><cylinderGeometry args={[0.4, 0.4, 0.06, 18]} /></P>
+        {GOODS.slice(0, 4).map((c, k) => (
+          <P key={k} color={c} position={[Math.cos(k * 1.5) * 0.22, 0.05, Math.sin(k * 1.5) * 0.22]} line={0}><sphereGeometry args={[0.07, 8, 8]} /></P>
+        ))}
+      </group>
+      <Html position={[0, 4.5, 0]} center distanceFactor={14} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-sign">
           <b>🎨 Pixel workshop</b>
           <span>{design ? `“${design.name}” · ${d.designs.length} on chain` : "Draw the first design"}</span>
@@ -517,20 +545,11 @@ function ProjectGate({ open }: { open: (t: Target) => void }) {
   return (
     <group position={[x, 0, z]} {...clickable(() => open({ kind: "tab", tab: "projects" }))}>
       {[-4, 4].map((px) => (
-        <mesh key={px} position={[px, 3.6, 0]}>
-          <boxGeometry args={[0.6, 7.2, 0.6]} />
-          <meshStandardMaterial color="#2c3245" metalness={0.5} />
-        </mesh>
+        <P key={px} color={WOOD_DARK} position={[px, 3.4, 0]}><cylinderGeometry args={[0.32, 0.38, 6.8, 12]} /></P>
       ))}
-      <mesh position={[0, 7.4, 0]}>
-        <boxGeometry args={[9, 1, 0.7]} />
-        <meshStandardMaterial color="#1b1f2c" />
-      </mesh>
-      <mesh position={[0, 6.86, 0.36]}>
-        <boxGeometry args={[8.6, 0.08, 0.02]} />
-        <meshBasicMaterial color="#7ff5ff" />
-      </mesh>
-      <Html position={[0, 7.4, 0.4]} center distanceFactor={26} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+      <P color="#ffd166" position={[0, 6.6, 0]}><boxGeometry args={[9.4, 1.3, 0.5]} /></P>
+      <P color="#ef476f" position={[0, 7.45, 0]}><boxGeometry args={[10, 0.35, 0.8]} /></P>
+      <Html position={[0, 6.6, 0.3]} center distanceFactor={26} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-gate">
           <b>BOT BAZAAR</b>
           <span>{d.projects.length ? `districts: ${d.projects.slice(0, 3).join(" · ")}` : "no fee · no token · escrow on chain"}</span>
@@ -540,48 +559,103 @@ function ProjectGate({ open }: { open: (t: Target) => void }) {
   );
 }
 
-/** Strings of market lights between the rings. */
-function Lights() {
+/** Bunting: strings of little flags around the market. Pieces close to the camera step aside so
+ *  the follow camera never looks through a giant flag or pole. */
+const FLAG_N = 96;
+const FLAGS = Array.from({ length: FLAG_N }, (_, i) => {
+  // poles sit between the paths (15° off each axis), the flags sag between poles
+  const a = ((i + 4) / FLAG_N) * Math.PI * 2;
+  const seg = (i % 8) / 8;
+  return { a, x: Math.sin(a) * 13, y: 6.2 - Math.sin(seg * Math.PI) * 0.7, z: -Math.cos(a) * 13 };
+});
+const POLES = Array.from({ length: 12 }, (_, i) => {
+  const a = ((i + 0.5) / 12) * Math.PI * 2;
+  return { x: Math.sin(a) * 13, z: -Math.cos(a) * 13 };
+});
+const NEAR_CAMERA = 7;
+function Bunting() {
   const mesh = useRef<InstancedMesh>(null);
-  const N = 120;
+  const poles = useRef<(Group | null)[]>([]);
+  const camera = useThree((s) => s.camera);
+  const o = useMemo(() => new Object3D(), []);
   useEffect(() => {
     const m = mesh.current;
     if (!m) return;
-    const o = new Object3D();
     const c = new Color();
-    const colors = ["#ffd66b", "#ff5fd2", "#7ff5ff", "#4ee39b"];
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2;
-      const seg = (i % 10) / 10;
-      o.position.set(Math.sin(a) * 13, 5.4 - Math.sin(seg * Math.PI) * 0.7, -Math.cos(a) * 13);
-      o.updateMatrix();
-      m.setMatrixAt(i, o.matrix);
-      m.setColorAt(i, c.set(colors[i % colors.length]));
-    }
-    m.instanceMatrix.needsUpdate = true;
+    FLAGS.forEach((_, i) => m.setColorAt(i, c.set(GOODS[i % GOODS.length])));
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }, []);
+  useFrame(() => {
+    const m = mesh.current;
+    if (!m) return;
+    const cx = camera.position.x;
+    const cz = camera.position.z;
+    FLAGS.forEach((f, i) => {
+      const hide = Math.hypot(f.x - cx, f.z - cz) < NEAR_CAMERA;
+      o.position.set(f.x, f.y, f.z);
+      o.rotation.set(Math.PI, -f.a, 0);
+      o.scale.set(hide ? 0 : 1, hide ? 0 : 1, hide ? 0 : 0.15);
+      o.updateMatrix();
+      m.setMatrixAt(i, o.matrix);
+    });
+    m.instanceMatrix.needsUpdate = true;
+    POLES.forEach((p, i) => {
+      const g = poles.current[i];
+      if (g) g.visible = Math.hypot(p.x - cx, p.z - cz) >= NEAR_CAMERA;
+    });
+  });
   return (
     <>
-      <instancedMesh ref={mesh} args={[undefined, undefined, N]}>
-        <sphereGeometry args={[0.09, 8, 8]} />
-        <meshBasicMaterial toneMapped={false} />
+      <instancedMesh ref={mesh} args={[undefined, undefined, FLAG_N]}>
+        <coneGeometry args={[0.2, 0.42, 3]} />
+        <meshToonMaterial gradientMap={GRAD} />
       </instancedMesh>
-      {Array.from({ length: 12 }, (_, i) => {
-        const a = (i / 12) * Math.PI * 2;
-        return (
-          <mesh key={i} position={[Math.sin(a) * 13, 2.7, -Math.cos(a) * 13]}>
-            <cylinderGeometry args={[0.04, 0.06, 5.4, 6]} />
-            <meshStandardMaterial color="#2c3245" />
-          </mesh>
-        );
-      })}
+      {POLES.map((p, i) => (
+        <group key={i} ref={(g) => { poles.current[i] = g; }} position={[p.x, 3.2, p.z]}>
+          <P color={WOOD_DARK}><cylinderGeometry args={[0.06, 0.08, 6.4, 8]} /></P>
+        </group>
+      ))}
     </>
   );
 }
 
+function Tree({ x, z, s, kind }: { x: number; z: number; s: number; kind: number }) {
+  return (
+    <group position={[x, 0, z]} scale={s}>
+      <P color={WOOD_DARK} position={[0, 0.7, 0]}><cylinderGeometry args={[0.18, 0.24, 1.4, 8]} /></P>
+      {kind === 1 ? (
+        <>
+          <P color="#4fb36b" position={[0, 1.9, 0]}><coneGeometry args={[1.1, 1.7, 12]} /></P>
+          <P color="#5cc77a" position={[0, 2.8, 0]}><coneGeometry args={[0.8, 1.3, 12]} /></P>
+        </>
+      ) : (
+        <>
+          <P color={kind ? "#7fd36e" : "#ffb3c7"} position={[0, 2.1, 0]}><sphereGeometry args={[1.05, 16, 16]} /></P>
+          <P color={kind ? "#8fdd7d" : "#ffc4d3"} position={[0.55, 1.75, 0.35]}><sphereGeometry args={[0.6, 14, 14]} /></P>
+        </>
+      )}
+    </group>
+  );
+}
+
+function Cloud({ x, y, z, s }: { x: number; y: number; z: number; s: number }) {
+  const g = useRef<Group>(null);
+  useFrame((_, dt) => {
+    if (!g.current) return;
+    g.current.position.x += dt * 0.4;
+    if (g.current.position.x > 60) g.current.position.x = -60;
+  });
+  return (
+    <group ref={g} position={[x, y, z]} scale={s}>
+      {([[0, 0, 0, 1.6], [1.6, -0.2, 0.2, 1.2], [-1.5, -0.3, 0, 1.1], [0.6, 0.7, -0.2, 1.1]] as const).map(([cx, cy, cz, r], i) => (
+        <P key={i} color="#ffffff" position={[cx, cy, cz]} line={0.05}><sphereGeometry args={[r, 16, 16]} /></P>
+      ))}
+    </group>
+  );
+}
+
 function Ground() {
-  const streets = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+  const paths = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]}
@@ -589,18 +663,21 @@ function Ground() {
           e.stopPropagation();
           player.target = { x: e.point.x, z: e.point.z };
         }}>
-        <circleGeometry args={[WORLD_R + 20, 64]} />
-        <meshStandardMaterial color="#141725" />
+        <circleGeometry args={[WORLD_R + 40, 64]} />
+        <meshToonMaterial color="#9ed97a" gradientMap={GRAD} />
       </mesh>
-      <gridHelper args={[56, 56, "#23304f", "#1b2238"]} position={[0, 0.01, 0]} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
-        <ringGeometry args={[12.6, 13.4, 96]} />
-        <meshBasicMaterial color="#1f6f8b" transparent opacity={0.5} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <circleGeometry args={[17.5, 64]} />
+        <meshToonMaterial color="#f6e3b8" gradientMap={GRAD} />
       </mesh>
-      {streets.map((a, i) => (
-        <mesh key={i} rotation={[-Math.PI / 2, 0, a]} position={[Math.sin(a) * 11, 0.02, -Math.cos(a) * 11]}>
-          <planeGeometry args={[0.12, 14]} />
-          <meshBasicMaterial color="#7ff5ff" transparent opacity={0.6} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
+        <ringGeometry args={[17.3, 17.7, 96]} />
+        <meshBasicMaterial color="#d9b77c" />
+      </mesh>
+      {paths.map((a, i) => (
+        <mesh key={i} rotation={[-Math.PI / 2, 0, a]} position={[Math.sin(a) * 21, 0.02, -Math.cos(a) * 21]}>
+          <planeGeometry args={[3.2, 10]} />
+          <meshToonMaterial color="#f6e3b8" gradientMap={GRAD} />
         </mesh>
       ))}
     </group>
@@ -629,7 +706,8 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
         player.target = null;
         e.preventDefault();
       }
-      if ((e.code === "KeyF" || e.code === "Enter") && nearRef.current) open(nearRef.current.target);
+      const t = nearRef.current?.target;
+      if ((e.code === "KeyF" || e.code === "Enter") && t) open(t);
     };
     const up = (e: KeyboardEvent) => keys.current.delete(e.code);
     const blur = () => keys.current.clear();
@@ -660,7 +738,7 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
       const sp = 7 * dt;
       let nx = player.x + (dx / len) * sp;
       let nz = player.z + (dz / len) * sp;
-      // push out of stalls and landmarks
+      // push out of stalls, landmarks and trees
       for (const s of spots) {
         if (!s.r) continue;
         const ox = nx - s.x;
@@ -685,6 +763,7 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
     let best: Spot | null = null;
     let bestD = Infinity;
     for (const s of spots) {
+      if (!s.target) continue;
       const dd = Math.hypot(s.x - player.x, s.z - player.z) - s.r;
       if (dd < 2.2 && dd < bestD) (best = s), (bestD = dd);
     }
@@ -696,13 +775,12 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
 
   return (
     <group ref={g}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-        <ringGeometry args={[0.45, 0.6, 32]} />
-        <meshBasicMaterial color="#7ff5ff" />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+        <circleGeometry args={[0.55, 32]} />
+        <meshBasicMaterial color={INK} transparent opacity={0.18} />
       </mesh>
       <Trader kind={d.myKind} address={d.me ?? "0x0"} you />
-      <pointLight position={[0, 2.6, 1]} color="#bfefff" intensity={8} distance={7} />
-      <Html position={[0, 2.1, 0]} center distanceFactor={12} zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+      <Html position={[0, 2.2, 0]} center distanceFactor={12} zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-me">You</div>
       </Html>
     </group>
@@ -718,31 +796,35 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
     const out: Spot[] = placed.map(({ shop, slot }) => ({ x: slot.x, z: slot.z, r: 1.7, name: shop.title, target: { kind: "shop", owner: shop.owner } }));
     if (free) out.push({ x: free.x, z: free.z, r: 1.7, name: "Free stall: open your shop", target: { kind: "tab", tab: "account" } });
     out.push(
-      { ...LANDMARK.core, name: "Escrow core: your purchases", target: { kind: "tab", tab: "account" } },
+      { ...LANDMARK.core, name: "Escrow lockers: your orders", target: { kind: "tab", tab: "account" } },
       { ...LANDMARK.board, name: "Request board", target: { kind: "tab", tab: "requests" } },
-      { ...LANDMARK.stage, name: "Bot or Not stage", target: { kind: "tab", tab: "botornot" } },
+      { ...LANDMARK.stage, name: "Bot or Not theatre", target: { kind: "tab", tab: "botornot" } },
       { ...LANDMARK.wall, name: "Pixel workshop", target: { kind: "tab", tab: "workshop" } },
       { ...LANDMARK.gate, r: 0.6, name: "Projects gate", target: { kind: "tab", tab: "projects" } },
     );
+    for (const t of TREES) out.push({ x: t.x, z: t.z, r: 0.45 * t.s, name: "", target: null });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d]);
   return (
     <>
-      <color attach="background" args={["#0b0d18"]} />
-      <fog attach="fog" args={["#0b0d18", 28, 70]} />
-      <Stars radius={90} depth={40} count={2500} factor={3} fade speed={0.6} />
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={["#6d7cff", "#1a1020", 0.8]} />
-      <directionalLight position={[10, 18, 8]} intensity={0.9} color="#b9c6ff" />
+      <color attach="background" args={["#bfe9ff"]} />
+      <fog attach="fog" args={["#bfe9ff", 45, 95]} />
+      <ambientLight intensity={0.9} />
+      <hemisphereLight args={["#ffffff", "#9ed97a", 0.7]} />
+      <directionalLight position={[12, 20, 10]} intensity={1.6} color="#fff2d6" />
       <Ground />
-      <Lights />
+      <Bunting />
+      {TREES.map((t, i) => <Tree key={i} {...t} />)}
+      <Cloud x={-20} y={16} z={-40} s={1.6} />
+      <Cloud x={14} y={19} z={-48} s={2} />
+      <Cloud x={34} y={14} z={-30} s={1.3} />
       <group {...clickable(() => open({ kind: "tab", tab: "account" }))}>
-        <EscrowCore />
+        <EscrowLockers />
       </group>
       <RequestBoard open={open} />
       <BotOrNotStage open={open} />
-      <PixelWall open={open} />
+      <PixelEasel open={open} />
       <ProjectGate open={open} />
       {placed.map(({ shop, slot }) => <Stall key={shop.owner} shop={shop} slot={slot} open={open} />)}
       {free && <EmptyStall slot={free} open={open} />}
@@ -759,8 +841,8 @@ function Root({ open }: { open: (t: Target) => void }) {
         <Scene open={open} setNear={setNear} />
       </Canvas>
       <div className="w-hud">
-        {near ? (
-          <button className="w-open" onClick={() => open(near.target)}>
+        {near?.target ? (
+          <button className="w-open" onClick={() => open(near.target!)}>
             Open {near.name} <kbd>F</kbd>
           </button>
         ) : (
