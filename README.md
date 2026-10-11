@@ -21,6 +21,7 @@ receipts and a buyer base without writing commerce contracts themselves.
 | | |
 |---|---|
 | Status | Contracts and web client complete and tested on a local chain. Not yet deployed. |
+| Play it | **[hakhyun-kim.github.io/bot-bazaar](https://hakhyun-kim.github.io/bot-bazaar/)**: the real contracts on a demo chain inside your browser, no wallet needed |
 | Chain | BOT Chain mainnet (chain id 677) and testnet (968), EVM |
 | License | MIT |
 
@@ -282,7 +283,15 @@ listings, offers and expiry, badges, Agent Pass signatures and replay protection
 (sealed answers, one vote each, reveal timing, claims, forfeits), requests (cancel, accept, dispute
 window, missed deadline, hand-back) and the workshop.
 
-To click around in a browser:
+The quickest way to click around is the [published page](https://hakhyun-kim.github.io/bot-bazaar/)
+(or `npm run dev` with no chain). Until a network has a deployment it opens on **Demo (in this
+browser)**: [`web/src/demo.ts`](web/src/demo.ts) runs the compiled contracts on an ethereumjs EVM in
+the page, with four funded players to switch between, seed shops, requests, designs and a live Bot
+or Not round, and a ⏩ +1 day button for escrow and reveal timing. Transactions are kept in
+localStorage and replayed on reload; Reset starts over. `.github/workflows/pages.yml` rebuilds the
+page on every push to `main`.
+
+To click around against a real node:
 
 ```bash
 npm run chain        # terminal 1: local chain on :8545 with sample projects, shops and designs
@@ -317,7 +326,7 @@ For explorer source verification, `npm run verify-input` writes the solc standar
 contracts/            Solidity: BazaarMarket · BazaarOffers · BazaarRequests · BazaarProjects ·
                       AgentPass · BotOrNot · PixelWorkshop
 scripts/
-  compile.mjs         compile and write web/src/abi.json, print sizes
+  compile.mjs         compile and write web/src/abi.json and bytecode.json, print sizes
   test-local.mjs      end-to-end tests on a local anvil
   dev-chain.mjs       local chain with sample data for the web client
   deploy.mjs          deploy to testnet or mainnet

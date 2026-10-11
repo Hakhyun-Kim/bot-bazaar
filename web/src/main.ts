@@ -8,10 +8,12 @@ import {
   http,
   parseEther,
   type Address,
+  type Chain,
   type PublicClient,
   type WalletClient,
 } from "viem";
 import abiJson from "./abi.json";
+import type { DemoChain } from "./demo";
 import { deploymentFor, type Deployment } from "./deployments";
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
@@ -52,7 +54,11 @@ const store = {
   },
 };
 
-let networkKey = (store.get("bazaar-network") as NetworkKey) || "testnet";
+// "demo" runs the contracts on an EVM inside this page (src/demo.ts): the default until a real deployment exists.
+type Key = NetworkKey | "demo";
+let networkKey = (store.get("bazaar-network") as Key) || (deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
+let demo: DemoChain | null = null;
+let demoChain: Chain | null = null;
 let tab: Tab = (location.hash.slice(1) as Tab) || "shops";
 if (!TABS.includes(tab)) tab = "shops";
 let pub: PublicClient;
@@ -66,8 +72,12 @@ const esc = (s: unknown) =>
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const bot = (wei: bigint) => `${formatEther(wei)} BOT`;
 
-function chain() {
-  return NETWORKS[networkKey];
+function chain(): Chain {
+  return networkKey === "demo" ? demoChain! : NETWORKS[networkKey];
+}
+/** Chain time in seconds: the demo clock can be fast-forwarded, real chains follow the wall clock. */
+function nowSec() {
+  return BigInt(demo ? demo.now() : Math.floor(Date.now() / 1000));
 }
 function c(name: Name) {
   if (!dep) throw new Error("not deployed on this network");
@@ -82,7 +92,7 @@ let queue: Promise<unknown> = Promise.resolve();
 function queueTx(label: string, name: Name, functionName: string, args: unknown[] = [], value?: bigint) {
   const run = async () => {
     if (!walletClient || !me) throw new Error("Connect a wallet first");
-    toast(`${label}: confirm in your wallet…`);
+    toast(`${label}: ${demo ? "sending" : "confirm in your wallet"}…`);
     const { request } = await pub.simulateContract({ ...c(name), functionName, args, value, account: me } as never);
     const hash = await walletClient.writeContract(request as never);
     toast(`${label}: sent, waiting for the block…`);
@@ -343,7 +353,7 @@ async function viewAccount(el: HTMLElement) {
     "BazaarOffers", "offersFor", [me, 0n, 20n]);
   const shop = await read<ShopData>("BazaarMarket", "shopOf", [me]);
   const self = (await whoIs([me])).get(me)!;
-  const now = BigInt(Math.floor(Date.now() / 1000));
+  const now = nowSec();
   el.innerHTML = `
     <h2>Account <small>${short(me)} · ${bot(balance)}${networkKey === "testnet" ? ` · <a href="${FAUCET}" target="_blank" rel="noopener">faucet</a>` : ""}</small></h2>
     <h3>What are you? <small>${badge(self)}</small></h3>
@@ -435,7 +445,7 @@ async function viewRequests(el: HTMLElement) {
     }
   }
   const who = await whoIs([...list.map((r) => r.poster), ...mine.flatMap(({ r }) => [r.poster, r.worker])]);
-  const now = BigInt(Math.floor(Date.now() / 1000));
+  const now = nowSec();
   el.innerHTML = `
     <h2>Requests <small>${total} open · humans hire bots, bots hire humans</small></h2>
     <p class="hero">Post a task with the reward locked in escrow. Anyone pitches, you pick one, they deliver, you accept,
@@ -528,7 +538,7 @@ async function viewBotOrNot(el: HTMLElement) {
   );
   const live = rounds.filter((x) => x && !x.r.closed) as NonNullable<(typeof rounds)[number]>[];
   const claimable = rounds.filter((x) => x && x.r.revealed && (x.vote === 2) === x.r.wasBot && (x.vote === 1 || x.vote === 2));
-  const now = BigInt(Math.floor(Date.now() / 1000));
+  const now = nowSec();
   const top = (key: keyof Score) =>
     who.map((a, i) => ({ a, s: scores[i] })).filter((x) => x.s[key] > 0).sort((x, y) => y.s[key] - x.s[key]).slice(0, 10);
   const my = me ? rounds.find((x) => x?.trader === me) : undefined;
@@ -609,7 +619,14 @@ async function render() {
     return;
   }
   banner.hidden = networkKey !== "mainnet" ? false : true;
-  banner.textContent = networkKey === "testnet" ? "Testnet: tokens have no value." : "Local chain.";
+  if (demo) {
+    banner.innerHTML = `Demo: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser. Clock ${new Date(
+      demo.now() * 1000).toLocaleString()} <button id="skip">⏩ +1 day</button> <button class="ghost" id="reset">Reset</button>`;
+    $("#skip").addEventListener("click", () => (demo!.skip(86400), void render()));
+    $("#reset").addEventListener("click", () => {
+      if (confirm("Start the demo over? Your demo shops, purchases and rounds are cleared.")) demo!.reset(), location.reload();
+    });
+  } else banner.textContent = networkKey === "testnet" ? "Testnet: tokens have no value." : "Local chain.";
   el.innerHTML = "<p class='muted'>Loading…</p>";
   try {
     await VIEWS[tab](el);
@@ -618,26 +635,51 @@ async function render() {
   }
 }
 
-function selectNetwork(key: NetworkKey) {
+async function selectNetwork(key: Key) {
   networkKey = key;
   store.set("bazaar-network", key);
+  walletClient = null;
+  me = null;
+  demo = null;
+  $("#connect").textContent = "Connect wallet";
+  $("#connect").hidden = key === "demo";
+  $("#persona").hidden = key !== "demo";
+  if (key === "demo") {
+    $("#view").innerHTML = "<p class='muted'>Starting the demo chain in your browser…</p>";
+    const mod = await import("./demo");
+    const d = await mod.DemoChain.boot();
+    demoChain = mod.DEMO_CHAIN;
+    pub = createPublicClient({ chain: demoChain, transport: custom(d), pollingInterval: 200 }) as PublicClient;
+    walletClient = createWalletClient({ chain: demoChain, transport: custom(d) });
+    dep = d.deployment;
+    demo = d;
+    const persona = $<HTMLSelectElement>("#persona");
+    persona.innerHTML = mod.PERSONAS.map((p) => `<option value="${p.address}">Play as ${p.name} · ${short(p.address)}</option>`).join("");
+    persona.value = store.get("bazaar-demo-persona") || mod.PERSONAS[0].address;
+    me = persona.value as Address;
+    return render();
+  }
   const ch = chain();
   pub = createPublicClient({ chain: ch, transport: http() }) as PublicClient;
   dep = deploymentFor(ch.id);
-  walletClient = null;
-  me = null;
-  $("#connect").textContent = "Connect wallet";
   void render();
 }
 
 const sel = $<HTMLSelectElement>("#network");
-sel.innerHTML = (Object.keys(NETWORKS) as NetworkKey[])
-  .map((k) => `<option value="${k}"${k === networkKey ? " selected" : ""}>${NETWORKS[k].name}</option>`)
+sel.innerHTML = [...(Object.keys(NETWORKS) as NetworkKey[]).map((k) => [k, NETWORKS[k].name]), ["demo", "Demo (in this browser)"]]
+  .map(([k, name]) => `<option value="${k}"${k === networkKey ? " selected" : ""}>${name}</option>`)
   .join("");
-sel.addEventListener("change", () => selectNetwork(sel.value as NetworkKey));
+sel.addEventListener("change", () => void selectNetwork(sel.value as Key));
+$<HTMLSelectElement>("#persona").addEventListener("change", (e) => {
+  me = (e.target as HTMLSelectElement).value as Address;
+  store.set("bazaar-demo-persona", me);
+  void render();
+});
 $("#connect").addEventListener("click", () => void connect());
 addEventListener("hashchange", () => {
   tab = (location.hash.slice(1) as Tab) || "shops";
   void render();
 });
-selectNetwork(networkKey);
+void selectNetwork(networkKey).catch((e: Error) => {
+  $("#view").innerHTML = `<p class="error">Could not start: ${esc(e.message)}</p>`;
+});

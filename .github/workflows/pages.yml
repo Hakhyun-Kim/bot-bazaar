@@ -1,0 +1,34 @@
+name: pages
+# Publishes the web client to the gh-pages branch, served at https://hakhyun-kim.github.io/bot-bazaar/.
+# With no deployment for a network it opens on the in-browser demo chain, so the page plays as is.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_BASE: /bot-bazaar/
+      - run: touch web/dist/.nojekyll
+      - name: Push web/dist to gh-pages
+        run: |
+          cd web/dist
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Publish ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages

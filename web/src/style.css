@@ -29,7 +29,8 @@ body > header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; 
 nav { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
 nav a { padding: 6px 10px; border-radius: 6px; text-decoration: none; color: var(--muted); }
 nav a.on { background: var(--bg); color: var(--text); }
-.right { display: flex; gap: 8px; }
+.right { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; }
+.right select { min-width: 0; max-width: 100%; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px; }
 h2 small, h3 small { font-weight: 400; color: var(--muted); font-size: 14px; }
 #banner { padding: 8px 16px; background: #ffd66b33; text-align: center; }

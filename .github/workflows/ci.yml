@@ -14,7 +14,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run compile
-      - run: git diff --exit-code web/src/abi.json
+      - run: git diff --exit-code web/src/abi.json web/src/bytecode.json
       - run: npm test
       - run: npm i @foundry-rs/anvil --ignore-scripts --no-save
       - run: npm run test:local
