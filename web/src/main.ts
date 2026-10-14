@@ -423,6 +423,30 @@ async function fundFromExtension() {
   }
 }
 
+/** The import form is open in the wallet panel. The key is typed or pasted, never taken from the URL. */
+let importing = false;
+function importKey(raw: string) {
+  const hex = raw.trim().replace(/^0x/i, "");
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) return toast("That is not a private key (64 hex characters, optionally starting with 0x)", true);
+  const key = `0x${hex.toLowerCase()}` as `0x${string}`;
+  let address: Address;
+  try {
+    address = privateKeyToAccount(key).address;
+  } catch {
+    return toast("That key is not valid", true);
+  }
+  if (address === me) return toast("That is already this wallet"), void ((importing = false), renderWallet());
+  if (!confirm(`Use wallet ${address} in this browser? The current browser wallet ${me} is replaced here.`)) return;
+  store.set(burnerKeyName(chain().id), key);
+  if (networkKey === "mainnet") store.set(MAINNET_WALLET, "burner");
+  if (networkKey === "testnet") store.set("bazaar-wallet", "burner");
+  importing = false;
+  useBurner();
+  toast(`Wallet ${short(address)} imported`);
+  void refreshBalance();
+  void render();
+}
+
 /** Set when a write found the browser wallet empty: the panel then leads with how to fund it. */
 let needFunds: string | null = null;
 
@@ -475,9 +499,18 @@ function renderWallet() {
            <p><input id="wallet-key" readonly value="${esc(store.get(burnerKeyName(chain().id)) ?? "")}" /> <button data-w="key">Copy private key</button> <button class="ghost" data-w="hide">Hide</button></p>`
         : `<p><button class="ghost" data-w="reveal">${real ? "Back up key" : "Show private key"}</button>${real ? ` <button class="ghost" data-w="file">Download backup</button>` : ""}
            <span class="muted">${real ? "the key lives only in this browser; save it to keep the wallet" : "testnet only · import it elsewhere or use it as a deploy key"}</span></p>`}
-      <p><button class="ghost" data-w="ext">Use MetaMask instead</button></p>`
+      ${importing
+        ? `<form id="import-key"><p class="muted">Paste a private key you backed up (from this site or another app). It replaces this browser
+             wallet on ${esc(chain().name)}${balance ? `, so <b>back up the current key first</b>: it still holds ${esc(bot(balance))}` : ""}.</p>
+           <p><input id="import-field" type="password" autocomplete="off" spellcheck="false" placeholder="0x… (64 hex characters)" />
+             <button>Import</button> <button type="button" class="ghost" data-w="noimport">Cancel</button></p></form>`
+        : `<p><button class="ghost" data-w="import">Import a key…</button> <button class="ghost" data-w="ext">Use MetaMask instead</button></p>`}`
     : networkKey === "testnet" || real ? `<p><button class="ghost" data-w="burner">Use a browser wallet instead</button></p>` : ""}`;
   if (burner && real) void depositQr($("#deposit-qr"));
+  box.querySelector("#import-key")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    importKey(box.querySelector<HTMLInputElement>("#import-field")!.value);
+  });
   box.querySelectorAll<HTMLButtonElement>("[data-w]").forEach((b) =>
     b.addEventListener("click", async () => {
       const w = b.dataset.w;
@@ -490,6 +523,8 @@ function renderWallet() {
       if (w === "file" && confirm("Download a text file with this wallet's private key? Keep the file private.")) downloadKey();
       if (w === "out") await sendOut();
       if (w === "start") showStart();
+      if (w === "import") (importing = true), renderWallet(), $("#import-field").focus();
+      if (w === "noimport") (importing = false), renderWallet();
       if (w === "hide") (showKey = false), renderWallet();
       if (w === "key") await copyKey();
       if (w === "ext") await connect();
@@ -1307,6 +1342,7 @@ $("#connect").addEventListener("click", () => {
   if (!me) return networkKey === "mainnet" ? showStart() : void connect();
   $("#wallet").hidden = !$("#wallet").hidden;
   showKey = false;
+  importing = false;
   $("#wallet").innerHTML = "";
   renderWallet();
   void refreshBalance();
