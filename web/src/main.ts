@@ -183,7 +183,15 @@ function noWallet() {
 }
 
 type Eip1193 = { request: (a: { method: string; params?: unknown[] }) => Promise<unknown>; on?: (e: string, f: (x: unknown) => void) => void };
-const injected = () => (window as unknown as { ethereum?: Eip1193 }).ethereum;
+// EIP-6963: with several wallet extensions installed, window.ethereum belongs to whichever loaded
+// last (Phantom, Coinbase…). Each wallet also announces itself; prefer MetaMask when it does.
+const announced = new Map<string, Eip1193>();
+addEventListener("eip6963:announceProvider", (e) => {
+  const d = (e as CustomEvent<{ info: { rdns: string }; provider: Eip1193 }>).detail;
+  if (d?.info?.rdns && d.provider) announced.set(d.info.rdns, d.provider);
+});
+dispatchEvent(new Event("eip6963:requestProvider"));
+const injected = () => announced.get("io.metamask") ?? (window as unknown as { ethereum?: Eip1193 }).ethereum ?? [...announced.values()][0];
 const rpcCode = (e: unknown) => {
   const x = e as { code?: number; data?: { originalError?: { code?: number } } };
   return x?.data?.originalError?.code ?? x?.code;
@@ -220,6 +228,7 @@ async function connect() {
   const eth = injected();
   if (!eth) return noWallet();
   try {
+    toast("Waiting for MetaMask… if no window opens, click the MetaMask icon in the toolbar");
     // Accounts first: MetaMask mobile refuses a chain switch from a site it has not connected yet.
     const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
     if (!accounts?.length) throw new Error("MetaMask shared no account");
@@ -227,7 +236,10 @@ async function connect() {
     walletClient = createWalletClient({ chain: chain(), transport: custom(eth) });
     me = getAddress(accounts[0]);
   } catch (e) {
-    const msg = rpcCode(e) === 4001 ? "MetaMask: request declined" : `MetaMask: ${(e as { shortMessage?: string }).shortMessage || (e as Error).message}`;
+    const code = rpcCode(e);
+    const msg = code === 4001 ? "MetaMask: request declined"
+      : code === -32002 ? "MetaMask already has a request waiting: click the MetaMask icon in the toolbar and answer it"
+      : `MetaMask: ${(e as { shortMessage?: string }).shortMessage || (e as Error).message}`;
     toast(msg, true);
     return;
   }
