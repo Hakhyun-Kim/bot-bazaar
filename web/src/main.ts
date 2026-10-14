@@ -5,6 +5,7 @@ import {
   createWalletClient,
   custom,
   formatEther,
+  getAddress,
   http,
   isAddress,
   parseEther,
@@ -164,10 +165,13 @@ function toast(msg: string, error = false) {
   setTimeout(() => t.remove(), 5000);
 }
 
+/** MetaMask's universal link: opens this page (network included) in the MetaMask app's browser. */
+const metamaskLink = () => `https://metamask.app.link/dapp/${location.host}${location.pathname}?network=${networkKey === "demo" ? "mainnet" : networkKey}`;
+
 /** No injected wallet (most phones): say how to get one instead of failing silently. */
 function noWallet() {
   const box = $("#wallet");
-  const here = `${location.host}${location.pathname}${location.search}`;
+  const here = metamaskLink().replace("https://metamask.app.link/dapp/", "");
   box.innerHTML = `
     <h3>No wallet in this browser</h3>
     <p>Drawing works without one. To publish or collect on ${esc(chain().name)} you need a wallet such as MetaMask.</p>
@@ -178,14 +182,23 @@ function noWallet() {
   box.querySelector("[data-close]")!.addEventListener("click", () => (box.hidden = true));
 }
 
-async function connect() {
-  const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
-  if (!eth) return noWallet();
+type Eip1193 = { request: (a: { method: string; params?: unknown[] }) => Promise<unknown>; on?: (e: string, f: (x: unknown) => void) => void };
+const injected = () => (window as unknown as { ethereum?: Eip1193 }).ethereum;
+const rpcCode = (e: unknown) => {
+  const x = e as { code?: number; data?: { originalError?: { code?: number } } };
+  return x?.data?.originalError?.code ?? x?.code;
+};
+
+/** Put the wallet on this page's chain, adding BOT Chain first if the wallet does not know it
+ *  (MetaMask mobile reports an unknown chain as 4902, sometimes wrapped, sometimes as -32603). */
+async function ensureChain(eth: Eip1193) {
   const ch = chain();
   const hex = `0x${ch.id.toString(16)}`;
+  if (Number(await eth.request({ method: "eth_chainId" })) === ch.id) return;
   try {
     await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
-  } catch {
+  } catch (e) {
+    if (rpcCode(e) === 4001) throw e; // the visitor said no
     await eth.request({
       method: "wallet_addEthereumChain",
       params: [{
@@ -196,13 +209,47 @@ async function connect() {
         blockExplorerUrls: ch.blockExplorers ? [ch.blockExplorers.default.url] : undefined,
       }],
     });
+    // Some wallets add the chain without moving to it.
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] }).catch(() => undefined);
   }
-  walletClient = createWalletClient({ chain: ch, transport: custom(eth) });
-  [me] = await walletClient.requestAddresses();
+  if (Number(await eth.request({ method: "eth_chainId" })) !== ch.id) throw new Error(`Switch MetaMask to ${ch.name} and try again`);
+}
+
+let watching = false;
+async function connect() {
+  const eth = injected();
+  if (!eth) return noWallet();
+  try {
+    // Accounts first: MetaMask mobile refuses a chain switch from a site it has not connected yet.
+    const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+    if (!accounts?.length) throw new Error("MetaMask shared no account");
+    await ensureChain(eth);
+    walletClient = createWalletClient({ chain: chain(), transport: custom(eth) });
+    me = getAddress(accounts[0]);
+  } catch (e) {
+    const msg = rpcCode(e) === 4001 ? "MetaMask: request declined" : `MetaMask: ${(e as { shortMessage?: string }).shortMessage || (e as Error).message}`;
+    toast(msg, true);
+    return;
+  }
   burner = false;
   if (networkKey === "testnet") store.set("bazaar-wallet", "extension");
   if (networkKey === "mainnet") store.set(MAINNET_WALLET, "extension");
+  if (!watching && eth.on) {
+    watching = true;
+    eth.on("accountsChanged", (a) => {
+      if (burner) return;
+      const list = a as string[];
+      me = list.length ? getAddress(list[0]) : null;
+      if (!me) walletClient = null;
+      void refreshBalance();
+      void render();
+    });
+    eth.on("chainChanged", (id) => {
+      if (!burner && me && Number(id) !== chain().id) toast(`MetaMask moved off ${chain().name}; switch back to publish`, true);
+    });
+  }
   $("#wallet").hidden = true;
+  void refreshBalance();
   void render();
 }
 
@@ -236,7 +283,10 @@ function showStart() {
       <section>
         <h4>🦊 MetaMask</h4>
         <p>Use the wallet you already have. Each transaction asks for your OK in MetaMask.</p>
-        <p><button class="fun" data-s="ext">Connect MetaMask</button></p>
+        ${injected() ? `<p><button class="fun" data-s="ext">Connect MetaMask</button></p>`
+          : `<p><a class="fun-link" href="${metamaskLink()}">Open in the MetaMask app</a></p>
+             <p class="muted">On a phone, MetaMask connects inside its own browser: this opens BOT Bazaar there, then tap Connect wallet › Connect MetaMask.
+               On a computer, <a href="https://metamask.io/download/" target="_blank" rel="noopener">install the MetaMask extension</a> and reload.</p>`}
       </section>
     </div>
     <p><button class="ghost" data-s="close">Not now</button></p>`;
@@ -251,7 +301,7 @@ function showStart() {
     void refreshBalance();
     void render();
   });
-  box.querySelector("[data-s=ext]")!.addEventListener("click", () => void connect());
+  box.querySelector("[data-s=ext]")?.addEventListener("click", () => void connect());
   box.querySelector("[data-s=close]")!.addEventListener("click", () => (box.hidden = true));
 }
 
@@ -330,15 +380,15 @@ async function getTestBot() {
 
 /** Move some BOT from an extension wallet (MetaMask…) into the browser wallet. */
 async function fundFromExtension() {
-  const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
-  if (!eth || !me) return toast("No browser extension wallet found", true);
+  const eth = injected();
+  if (!eth || !me) return toast("No MetaMask here: use the deposit address instead, or open this page in the MetaMask app", true);
   const amount = prompt(`How much ${networkKey === "mainnet" ? "" : "test "}BOT to send to the browser wallet?`, networkKey === "mainnet" ? "0.02" : "0.1");
   if (!amount) return;
   try {
     const ch = chain();
     const ext = createWalletClient({ chain: ch, transport: custom(eth) });
     const [from] = await ext.requestAddresses();
-    await ext.switchChain({ id: ch.id }).catch(() => undefined);
+    await ensureChain(eth);
     const hash = await ext.sendTransaction({ account: from, to: me, value: parseEther(amount), chain: ch });
     toast("Sent, waiting for the block…");
     await pub.waitForTransactionReceipt({ hash });
