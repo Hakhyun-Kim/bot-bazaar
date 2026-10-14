@@ -54,7 +54,7 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const hue = (a: string) => {
   let h = 0;
   for (let i = 2; i < a.length; i++) h = (h * 31 + a.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360} 75% 64%)`;
+  return `hsl(${h % 360}, 75%, 64%)`;
 };
 
 /** Three flat bands of light: the cartoon look comes from this plus ink outlines. */
