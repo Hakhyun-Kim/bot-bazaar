@@ -40,7 +40,10 @@ export function compileAll(names = CONTRACTS) {
   if (!solc.version().startsWith(SOLC_VERSION)) {
     throw new Error(`solc ${solc.version()} found, ${SOLC_VERSION} expected (npm ci)`);
   }
-  const out = JSON.parse(solc.compile(JSON.stringify(standardInput(names))));
+  const input = standardInput(names);
+  // Immutable positions too, so verify-explorer.mjs can compare on-chain code byte for byte.
+  input.settings = { ...input.settings, outputSelection: { "*": { "*": [...SETTINGS.outputSelection["*"]["*"], "evm.deployedBytecode.immutableReferences"] } } };
+  const out = JSON.parse(solc.compile(JSON.stringify(input)));
   const errors = (out.errors || []).filter((e) => e.severity === "error");
   if (errors.length) throw new Error(errors.map((e) => e.formattedMessage).join("\n"));
   const artifacts = {};
@@ -50,6 +53,8 @@ export function compileAll(names = CONTRACTS) {
       abi: c.abi,
       bytecode: `0x${c.evm.bytecode.object}`,
       size: c.evm.deployedBytecode.object.length / 2,
+      deployedBytecode: `0x${c.evm.deployedBytecode.object}`,
+      immutableReferences: c.evm.deployedBytecode.immutableReferences || {},
     };
   }
   return artifacts;

@@ -1,0 +1,28 @@
+name: verify-explorer
+# Checks that every deployed contract's on-chain code matches this checkout, then submits the
+# source (standard-JSON input) to the network's explorer for contracts not yet verified.
+# No secrets: verification is public. Unchecked = check only.
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        type: choice
+        options: [mainnet, testnet]
+        default: mainnet
+      submit:
+        description: "Submit unverified contracts (unchecked = check only)"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-explorer.mjs --network ${{ inputs.network }} ${{ inputs.submit && '--submit' || '' }}

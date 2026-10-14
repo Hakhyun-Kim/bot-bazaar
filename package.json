@@ -12,6 +12,7 @@
     "chain": "node scripts/dev-chain.mjs",
     "deploy": "node scripts/deploy.mjs",
     "verify-input": "node scripts/verify-input.mjs",
+    "verify": "node scripts/verify-explorer.mjs",
     "dev": "npm run dev -w web",
     "build": "npm run build -w web"
   },
