@@ -60,7 +60,12 @@ const store = {
 // (src/demo.ts) and is the fallback while testnet has no deployment.
 type Key = NetworkKey | "demo";
 const NETWORK_CHOICE = "bazaar-network-v2"; // v2: choices made while demo was the default are dropped
-let networkKey = (store.get(NETWORK_CHOICE) as Key) || (deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
+// ?network=mainnet opens a network directly, so a launch link can point at mainnet without changing the default.
+const linked = new URLSearchParams(location.search).get("network") as Key | null;
+let networkKey: Key =
+  (linked && (linked === "demo" || linked in NETWORKS) ? linked : null) ||
+  (store.get(NETWORK_CHOICE) as Key) ||
+  (deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
 let demo: DemoChain | null = null;
 let demoChain: Chain | null = null;
 let tab: Tab = (location.hash.slice(1) as Tab) || "bazaar";
