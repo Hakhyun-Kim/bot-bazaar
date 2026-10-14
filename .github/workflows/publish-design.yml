@@ -1,0 +1,38 @@
+name: publish-design
+# Publishes one free design to the deployed Pixel Workshop from the deployer wallet (DEPLOYER_KEY).
+# Used for the launch's core-function transaction. Unchecked = dry run (simulates, prints gas).
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: "mainnet or testnet"
+        type: choice
+        options: [mainnet, testnet]
+        default: mainnet
+      name:
+        description: "Design name (1 to 36 bytes)"
+        type: string
+        default: "BOT Bazaar robot"
+      broadcast:
+        description: "Publish (unchecked = dry run)"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: publish-design
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Publish design
+        env:
+          DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+          NAME: ${{ inputs.name }}
+        run: node scripts/publish-design.mjs --network ${{ inputs.network }} --name "$NAME" ${{ inputs.broadcast && '--yes' || '' }}
