@@ -1,0 +1,22 @@
+{
+  "chainId": 677,
+  "network": "mainnet",
+  "freeOnly": true,
+  "deployer": "0x7cfD8d742C58D9e43A5AA20E8A786A2D193655B3",
+  "deployedAt": "2026-10-14T04:45:06.530Z",
+  "compiler": {
+    "solc": "0.8.28",
+    "evmVersion": "paris",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    }
+  },
+  "contracts": {
+    "PixelWorkshop": {
+      "address": "0x48b1c637f7fe9fec89961577329657344311adbb",
+      "tx": "0xaa1f6dde4fcd8c086a6841275da0a8dd8d447dcd7e84f7fe0008360df3cebfa6",
+      "block": 26624911
+    }
+  }
+}
