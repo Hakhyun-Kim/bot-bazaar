@@ -3,7 +3,7 @@
 import { parseEther, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { compileAll } from "./lib/compile.mjs";
-import { ANVIL_KEYS, ANVIL_MISSING, deployAll, startChain } from "./lib/localchain.mjs";
+import { ANVIL_KEYS, ANVIL_MISSING, deployAll, deployOne, startChain } from "./lib/localchain.mjs";
 
 const node = await startChain();
 if (!node) {
@@ -211,6 +211,37 @@ await check("paid design pays the creator directly", async () => {
 });
 await check("cannot show a design you do not own", async () => {
   await reverts(other, "PixelWorkshop", "setProfileDesign", [1n], undefined, "not-owned");
+});
+await check("names are 1 to 36 bytes", async () => {
+  await reverts(seller, "PixelWorkshop", "register", ["", pixels, 0, 0n], undefined, "name");
+  await reverts(seller, "PixelWorkshop", "register", ["x".repeat(37), pixels, 0, 0n], undefined, "name");
+  await write(seller, "PixelWorkshop", "register", ["x".repeat(36), pixels, 0, 0n]);
+});
+await check("a free design refuses BOT; unknown ids revert", async () => {
+  await reverts(other, "PixelWorkshop", "collect", [0n], 1n, "WrongPrice");
+  await reverts(other, "PixelWorkshop", "collect", [99n]);
+  await reverts(other, "PixelWorkshop", "setProfileDesign", [100n]);
+});
+await check("gallery pages: past the end is empty, limit caps the page", async () => {
+  const n = await read("PixelWorkshop", "designCount");
+  eq((await read("PixelWorkshop", "designsPage", [n, 10n]))[0].length, 0);
+  eq((await read("PixelWorkshop", "designsPage", [n + 5n, 10n]))[0].length, 0);
+  eq((await read("PixelWorkshop", "designsPage", [0n, 0n]))[0].length, 0);
+  const [ids] = await read("PixelWorkshop", "designsPage", [1n, 1n]);
+  eq(ids.length, 1);
+  eq(ids[0], n - 2n, "second newest");
+});
+await check("clearing the profile design", async () => {
+  await write(buyer, "PixelWorkshop", "setProfileDesign", [0n]);
+  eq((await read("PixelWorkshop", "profileDesignOf", [addr(buyer)]))[0], false);
+});
+await check("deploys alone (the first mainnet version)", async () => {
+  const solo = await deployOne({ pub: node.pub, wallet: deployer, artifacts, name: "PixelWorkshop" });
+  eq(Object.keys(solo).join(), "PixelWorkshop");
+  const w = { address: solo.PixelWorkshop.address, abi: artifacts.PixelWorkshop.abi };
+  const { request } = await node.pub.simulateContract({ ...w, functionName: "register", args: ["Solo", pixels, 1, 0n], account: other.account });
+  await node.pub.waitForTransactionReceipt({ hash: await other.writeContract(request) });
+  eq(await node.pub.readContract({ ...w, functionName: "designCount" }), 1n);
 });
 
 console.log("\nbots and humans");

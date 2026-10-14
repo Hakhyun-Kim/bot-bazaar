@@ -2,6 +2,10 @@
 //
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network testnet          # dry run: checks only
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network testnet --yes    # broadcast
+//   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network mainnet --only PixelWorkshop --yes
+//
+// --only PixelWorkshop deploys the workshop alone (the first mainnet version: free designs and the
+// gallery, no market or escrow). The workshop has no constructor arguments and no links to the others.
 //
 // The key is read from the environment only — never from a file in the repo, never printed.
 // Writes deployments/<chainId>.json (addresses, tx hashes, blocks, compiler settings), which
@@ -11,7 +15,7 @@ import path from "node:path";
 import { createPublicClient, createWalletClient, formatEther, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { ROOT, SETTINGS, SOLC_VERSION, compileAll } from "./lib/compile.mjs";
-import { deployAll } from "./lib/localchain.mjs";
+import { deployAll, deployOne } from "./lib/localchain.mjs";
 import { NETWORKS, chainOf } from "./lib/networks.mjs";
 
 const argv = process.argv.slice(2);
@@ -21,6 +25,11 @@ const opt = (k) => {
 };
 const network = opt("--network") || "testnet";
 const yes = argv.includes("--yes");
+const only = opt("--only");
+if (only && only !== "PixelWorkshop") {
+  console.error(`--only supports PixelWorkshop (the others are wired to each other). Got "${only}".`);
+  process.exit(1);
+}
 const chain = chainOf(network, opt("--rpc"));
 // Pasted keys often carry whitespace or come without 0x (MetaMask exports bare hex): accept both.
 const raw = (process.env.DEPLOYER_KEY || "").trim();
@@ -32,6 +41,16 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(key)) {
   process.exit(1);
 }
 const account = privateKeyToAccount(key);
+// The testnet deployer's key sits in a browser and a GitHub secret, so it never holds real BOT.
+if (network === "mainnet") {
+  for (const f of fs.readdirSync(path.join(ROOT, "deployments")).filter((n) => /^\d+\.json$/.test(n))) {
+    const d = JSON.parse(fs.readFileSync(path.join(ROOT, "deployments", f), "utf8"));
+    if (d.network !== "mainnet" && d.deployer?.toLowerCase() === account.address.toLowerCase()) {
+      console.error(`${account.address} deployed ${f} (${d.network}). Use a fresh mainnet-only wallet. Stopping.`);
+      process.exit(1);
+    }
+  }
+}
 const transport = http(chain.rpcUrls.default.http[0]);
 const pub = createPublicClient({ chain, transport });
 const wallet = createWalletClient({ chain, transport, account });
@@ -46,7 +65,8 @@ if (fs.existsSync(file) && !argv.includes("--force")) {
   console.error(`${path.relative(ROOT, file)} exists. Pass --force to deploy a fresh set.`);
   process.exit(1);
 }
-const artifacts = compileAll();
+const all = compileAll();
+const artifacts = only ? { [only]: all[only] } : all;
 const bal = await pub.getBalance({ address: account.address });
 console.log(`${chain.name} (${chain.id}) · deployer ${account.address} · ${formatEther(bal)} BOT`);
 for (const [n, a] of Object.entries(artifacts)) console.log(`  ${n.padEnd(15)} ${(a.size / 1024).toFixed(1)} KB`);
@@ -55,10 +75,11 @@ if (bal === 0n) {
   process.exit(1);
 }
 if (!yes) {
-  console.log("\nDry run. Add --yes to broadcast seven deployments.");
+  console.log(`\nDry run. Add --yes to broadcast ${only ? `the ${only} deployment` : "seven deployments"}.`);
   process.exit(0);
 }
-const contracts = await deployAll({ pub, wallet, artifacts, log: (l) => console.log(`  ${l}`) });
+const log = (l) => console.log(`  ${l}`);
+const contracts = only ? await deployOne({ pub, wallet, artifacts, name: only, log }) : await deployAll({ pub, wallet, artifacts, log });
 const record = {
   chainId: chain.id,
   network,
@@ -71,5 +92,5 @@ fs.mkdirSync(path.dirname(file), { recursive: true });
 fs.writeFileSync(file, JSON.stringify(record, null, 2) + "\n");
 console.log(`\nwrote ${path.relative(ROOT, file)} — commit it so the web client picks it up.`);
 if (chain.blockExplorers) {
-  console.log(`explorer: ${chain.blockExplorers.default.url}/address/${contracts.BazaarMarket.address}`);
+  console.log(`explorer: ${chain.blockExplorers.default.url}/address/${Object.values(contracts)[0].address}`);
 }

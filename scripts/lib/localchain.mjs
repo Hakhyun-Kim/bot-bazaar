@@ -95,14 +95,8 @@ export async function startChain({ port = 8546, chainId = 677 } = {}) {
   };
 }
 
-/**
- * Deploy all seven in the fixed order used by scripts/deploy.mjs.
- * BazaarMarket takes the offers address in its constructor, so it is predicted from the next nonce.
- */
-export async function deployAll({ pub, wallet, artifacts, log = () => {} }) {
-  const from = wallet.account.address;
-  const out = {};
-  const deploy = async (name, args = []) => {
+function deployer({ pub, wallet, artifacts, log }, out) {
+  return async (name, args = []) => {
     const a = artifacts[name];
     const hash = await wallet.deployContract({ abi: a.abi, bytecode: a.bytecode, args });
     const r = await pub.waitForTransactionReceipt({ hash });
@@ -111,6 +105,23 @@ export async function deployAll({ pub, wallet, artifacts, log = () => {} }) {
     log(`${name.padEnd(15)} ${r.contractAddress}`);
     return r.contractAddress;
   };
+}
+
+/** Deploy one stand-alone contract (PixelWorkshop: no constructor arguments, no links). */
+export async function deployOne({ pub, wallet, artifacts, name, log = () => {} }) {
+  const out = {};
+  await deployer({ pub, wallet, artifacts, log }, out)(name);
+  return out;
+}
+
+/**
+ * Deploy all seven in the fixed order used by scripts/deploy.mjs.
+ * BazaarMarket takes the offers address in its constructor, so it is predicted from the next nonce.
+ */
+export async function deployAll({ pub, wallet, artifacts, log = () => {} }) {
+  const from = wallet.account.address;
+  const out = {};
+  const deploy = deployer({ pub, wallet, artifacts, log }, out);
   const nonce = await pub.getTransactionCount({ address: from, blockTag: "pending" });
   const predictedOffers = getContractAddress({ from, nonce: BigInt(nonce + 1) });
   await deploy("BazaarMarket", [predictedOffers]);

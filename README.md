@@ -322,8 +322,12 @@ The deploy key is read from the environment only. It is never written to disk or
 ```bash
 DEPLOYER_KEY=0x... npm run deploy -- --network testnet          # dry run: chain id, balance, sizes
 DEPLOYER_KEY=0x... npm run deploy -- --network testnet --yes    # broadcast seven deployments
-DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --yes
+DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --only PixelWorkshop --yes   # first mainnet version
 ```
+
+The first mainnet version is the Pixel Workshop alone (free designs and the gallery); the site then shows
+only the workshop on mainnet. `deploy.mjs` refuses a mainnet deploy from any wallet that deployed a
+testnet set, because that key also lives in a browser and a GitHub secret.
 
 Testnet can be deployed from the page itself, with no key outside your browser: pick BOT Chain
 Testnet, get test BOT for the browser wallet, and press *Deploy the bazaar* (seven transactions,

@@ -1,8 +1,9 @@
 // Addresses come from deployments/<chainId>.json written by scripts/deploy.mjs.
 type Address = `0x${string}`;
+/** The first mainnet version is the Pixel Workshop alone, so a deployment may hold only some contracts. */
 export interface Deployment {
   chainId: number;
-  contracts: Record<"BazaarMarket" | "BazaarOffers" | "BazaarRequests" | "BazaarProjects" | "AgentPass" | "BotOrNot" | "PixelWorkshop", { address: Address }>;
+  contracts: Partial<Record<"BazaarMarket" | "BazaarOffers" | "BazaarRequests" | "BazaarProjects" | "AgentPass" | "BotOrNot" | "PixelWorkshop", { address: Address }>>;
 }
 
 const files = import.meta.glob<Deployment>("../../deployments/[0-9]*.json", { eager: true, import: "default" });

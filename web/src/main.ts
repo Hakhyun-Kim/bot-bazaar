@@ -89,9 +89,13 @@ function nowSec() {
   return BigInt(demo ? demo.now() : Math.floor(Date.now() / 1000));
 }
 function c(name: Name) {
-  if (!dep) throw new Error("not deployed on this network");
-  return { address: dep.contracts[name].address, abi: ABI[name] } as const;
+  const at = dep?.contracts[name];
+  if (!at) throw new Error(`${name} is not deployed on this network`);
+  return { address: at.address, abi: ABI[name] } as const;
 }
+/** A network with only the Pixel Workshop (the first mainnet version) shows just the workshop. */
+const workshopOnly = () => !!dep && !dep.contracts.BazaarMarket;
+const tabsHere = (): readonly Tab[] => (workshopOnly() ? ["workshop"] : TABS);
 function read<T>(name: Name, functionName: string, args: unknown[] = []): Promise<T> {
   return pub.readContract({ ...c(name), functionName, args } as never) as Promise<T>;
 }
@@ -853,7 +857,8 @@ const VIEWS: Record<Exclude<Tab, "bazaar">, (el: HTMLElement) => Promise<void>> 
 };
 
 async function render() {
-  $("#tabs").innerHTML = TABS.map((t) => `<a href="#${t}" class="${t === tab ? "on" : ""}">${TAB_LABEL[t]}</a>`).join("");
+  if (!tabsHere().includes(tab)) tab = tabsHere()[0];
+  $("#tabs").innerHTML = tabsHere().map((t) => `<a href="#${t}" class="${t === tab ? "on" : ""}">${TAB_LABEL[t]}</a>`).join("");
   const el = $("#view");
   const banner = $("#banner");
   $("#stage").hidden = tab !== "bazaar" || !dep;
@@ -868,8 +873,12 @@ async function render() {
     }
     return;
   }
-  banner.hidden = networkKey !== "mainnet" ? false : true;
-  if (demo) {
+  banner.hidden = false;
+  if (networkKey === "mainnet") {
+    banner.textContent = workshopOnly()
+      ? "BOT Chain mainnet: the Pixel Workshop is open. Publishing and collecting free designs costs only gas, paid in real BOT."
+      : "BOT Chain mainnet: payments are real BOT.";
+  } else if (demo) {
     banner.innerHTML = `Demo<span class="long">: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser.</span> · Clock ${new Date(
       demo.now() * 1000).toLocaleString()} <button id="skip">⏩ +1 day</button> <button class="ghost" id="reset">Reset</button>`;
     $("#skip").addEventListener("click", () => (demo!.skip(86400), void render()));

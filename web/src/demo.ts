@@ -223,7 +223,7 @@ export class DemoChain {
   /** Same order and constructor wiring as deployAll() in scripts/lib/localchain.mjs. */
   private async deployAll() {
     this.deployment = this.addresses();
-    const c = this.deployment.contracts;
+    const c = this.deployment.contracts as Required<Deployment["contracts"]>;
     const args: Record<Name, Hex> = {
       BazaarMarket: encodeAbiParameters([{ type: "address" }], [c.BazaarOffers.address]),
       BazaarOffers: encodeAbiParameters([{ type: "address" }], [c.BazaarMarket.address]),
@@ -241,7 +241,7 @@ export class DemoChain {
 
   private call(k: number, name: Name, functionName: string, args: unknown[] = [], value = 0n) {
     const data = encodeFunctionData({ abi: ABI[name], functionName, args } as never);
-    return this.send(k, this.deployment.contracts[name].address, data, value);
+    return this.send(k, this.deployment.contracts[name]!.address, data, value);
   }
 
   /** A small bazaar to walk into: three shops, two requests, designs and a live Bot or Not round. */
