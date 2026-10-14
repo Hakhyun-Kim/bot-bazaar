@@ -126,6 +126,18 @@ function queueTx(label: string, name: Name, functionName: string, args: unknown[
       if (networkKey === "mainnet") showStart();
       throw new Error(networkKey === "mainnet" ? "Choose how to start: a browser wallet or MetaMask" : "Connect a wallet first");
     }
+    // Mainnet starts in a browser wallet with nothing in it: the first write that needs gas opens
+    // the wallet panel on how to fund it (deposit, send from MetaMask, or switch to MetaMask).
+    if (burner && networkKey === "mainnet") {
+      const have = await pub.getBalance({ address: me });
+      balance = have;
+      if (have < parseEther(PUBLISH_GAS) + (value ?? 0n)) {
+        needFunds = label;
+        $("#wallet").hidden = false;
+        renderWallet();
+        throw new Error("This browser wallet needs a little BOT for gas first");
+      }
+    }
     toast(`${label}: ${demo || burner ? "sending" : "confirm in your wallet"}…`);
     const { request } = await pub.simulateContract({ ...c(name), functionName, args, value, account: me } as never);
     // A local (burner) account signs in the page; the simulated request only carries its address.
@@ -411,6 +423,9 @@ async function fundFromExtension() {
   }
 }
 
+/** Set when a write found the browser wallet empty: the panel then leads with how to fund it. */
+let needFunds: string | null = null;
+
 /** Set after the warning is accepted; the key then shows in the panel with its own Copy button. */
 let showKey = false;
 
@@ -439,7 +454,10 @@ function renderWallet() {
   const box = $("#wallet");
   if (box.hidden || !me) return;
   const real = networkKey === "mainnet";
+  const fund = burner && real && needFunds && (balance === null || balance < parseEther(PUBLISH_GAS)) ? needFunds : null;
   box.innerHTML = `
+    ${fund ? `<p class="need-funds"><b>To ${esc(fund.toLowerCase())}, add a little BOT first.</b> This wallet was made in your browser and is still empty.
+      Gas for one design is about ${PUBLISH_GAS} BOT: deposit to the address below, send some from MetaMask, or use MetaMask instead.</p>` : ""}
     <h3>${burner ? "Browser wallet" : "Extension wallet"} <small class="muted">${esc(chain().name)}</small></h3>
     <p class="addr"><code>${me}</code> <button class="ghost" data-w="copy">Copy</button></p>
     <p>Balance <b>${balance === null ? "…" : bot(balance)}</b>${low ? ` <span class="warn">low</span>` : ""}</p>
@@ -458,7 +476,7 @@ function renderWallet() {
         : `<p><button class="ghost" data-w="reveal">${real ? "Back up key" : "Show private key"}</button>${real ? ` <button class="ghost" data-w="file">Download backup</button>` : ""}
            <span class="muted">${real ? "the key lives only in this browser; save it to keep the wallet" : "testnet only · import it elsewhere or use it as a deploy key"}</span></p>`}
       <p><button class="ghost" data-w="ext">Use MetaMask instead</button></p>`
-    : networkKey === "testnet" || real ? `<p><button class="ghost" data-w="${real ? "start" : "burner"}">Use a browser wallet instead</button></p>` : ""}`;
+    : networkKey === "testnet" || real ? `<p><button class="ghost" data-w="burner">Use a browser wallet instead</button></p>` : ""}`;
   if (burner && real) void depositQr($("#deposit-qr"));
   box.querySelectorAll<HTMLButtonElement>("[data-w]").forEach((b) =>
     b.addEventListener("click", async () => {
@@ -475,7 +493,7 @@ function renderWallet() {
       if (w === "hide") (showKey = false), renderWallet();
       if (w === "key") await copyKey();
       if (w === "ext") await connect();
-      if (w === "burner") (useBurner(), store.set("bazaar-wallet", "burner"), void render());
+      if (w === "burner") (useBurner(), store.set(real ? MAINNET_WALLET : "bazaar-wallet", "burner"), void refreshBalance(), void render());
     }));
 }
 
@@ -1267,7 +1285,8 @@ async function selectNetwork(key: Key) {
   dep = deploymentFor(ch.id);
   if (key === "testnet" && store.get("bazaar-wallet") !== "extension") useBurner();
   // Mainnet reopens the browser wallet only if the visitor chose it before (the key is already here).
-  if (key === "mainnet" && store.get(MAINNET_WALLET) === "burner" && store.get(burnerKeyName(ch.id))) useBurner();
+  // Mainnet starts in the browser wallet too (harry, 2026-10-14), unless the visitor picked MetaMask.
+  if (key === "mainnet" && store.get(MAINNET_WALLET) !== "extension") useBurner();
   if (burner) void refreshBalance();
   renderWallet();
   void render();

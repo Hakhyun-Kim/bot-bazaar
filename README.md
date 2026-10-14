@@ -331,8 +331,9 @@ the easel in the market or the next tab. Some things in the market need no contr
 gallery frames hang the on-chain designs on empty stalls, residents walk about and chat, five emotes (residents close by
 join in), one small errand a day with a stamp kept in the browser, and a Bot or Not practice round on mainnet
 (`web/src/world/errands.ts`). On mainnet the shops and parcel lockers show as coming soon.
-On mainnet, "Connect wallet" offers two ways to start: MetaMask, or a browser wallet whose key is made and kept only in
-that browser (meant for a little BOT for gas, with a deposit address and QR code, key backup and download, and "Send BOT out").
+On mainnet, visitors start in a browser wallet whose key is made and kept only in that browser (meant for a little BOT
+for gas, with a deposit address and QR code, key backup and download, and "Send BOT out"). The first publish without
+enough BOT opens the wallet panel on how to fund it: deposit, send from MetaMask, or switch to MetaMask.
 The first mainnet version is the Pixel Workshop alone (free designs and the gallery). `deploy.mjs` refuses a mainnet deploy from any wallet that deployed a
 testnet set, because that key also lives in a browser and a GitHub secret.
 
