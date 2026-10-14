@@ -1,6 +1,5 @@
 name: pages
-# Publishes the web client to the gh-pages branch, served at https://hakhyun-kim.github.io/bot-bazaar/
-# web/public/CNAME serves it at https://play.metah.dev/ (github.io redirects there).
+# Publishes the web client to the gh-pages branch; web/public/CNAME serves it at https://play.metah.dev/.
 # With no deployment for a network it opens on the in-browser demo chain, so the page plays as is.
 on:
   push:
