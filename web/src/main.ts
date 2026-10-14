@@ -6,6 +6,7 @@ import {
   custom,
   formatEther,
   http,
+  isAddress,
   parseEther,
   type Address,
   type Chain,
@@ -120,7 +121,10 @@ function queueTx(label: string, name: Name, functionName: string, args: unknown[
   const same = inFlight.get(key);
   if (same) return same;
   const run = async () => {
-    if (!walletClient || !me) throw new Error("Connect a wallet first");
+    if (!walletClient || !me) {
+      if (networkKey === "mainnet") showStart();
+      throw new Error(networkKey === "mainnet" ? "Choose how to start: a browser wallet or MetaMask" : "Connect a wallet first");
+    }
     toast(`${label}: ${demo || burner ? "sending" : "confirm in your wallet"}…`);
     const { request } = await pub.simulateContract({ ...c(name), functionName, args, value, account: me } as never);
     // A local (burner) account signs in the page; the simulated request only carries its address.
@@ -197,12 +201,107 @@ async function connect() {
   [me] = await walletClient.requestAddresses();
   burner = false;
   if (networkKey === "testnet") store.set("bazaar-wallet", "extension");
+  if (networkKey === "mainnet") store.set(MAINNET_WALLET, "extension");
   $("#wallet").hidden = true;
   void render();
 }
 
-// ---------- browser (burner) wallet, testnet only ----------
-/** Make or reuse this browser's testnet key. Valueless by design: it lives in localStorage. */
+// ---------- browser (burner) wallet ----------
+// Testnet starts in one automatically. On mainnet it holds real BOT, so it is the visitor's choice
+// (after GIWA Village): a key made in this browser and kept only here, funded with a little BOT for
+// gas, with backup, deposit address and a way to send the BOT back out.
+const MAINNET_WALLET = "bazaar-wallet-mainnet";
+/** About what one free design costs to publish on mainnet (≈160k gas at ≈20 gwei, 2026-10-14). */
+const PUBLISH_GAS = "0.003";
+
+/** Mainnet: how to start, a browser wallet or MetaMask. */
+function showStart() {
+  const box = $("#wallet");
+  showKey = false;
+  box.hidden = false;
+  box.innerHTML = `
+    <h3>How do you want to start? <small class="muted">${esc(chain().name)}</small></h3>
+    <div class="start-pick">
+      <section>
+        <h4>👛 Browser wallet</h4>
+        <p>A new wallet made right here, no app needed. Send it a little BOT and publish.</p>
+        <ul class="muted">
+          <li>The key is made and kept <b>only in this browser</b>. Nobody else has a copy, not us either.</li>
+          <li>It holds real BOT: <b>put in only a little</b>. One free design costs about ${PUBLISH_GAS} BOT of gas, so 0.02 BOT is plenty.</li>
+          <li>Clearing site data or losing this device loses the wallet. Back up the key from the wallet panel.</li>
+        </ul>
+        <label><input type="checkbox" id="start-ok" /> I understand, it's for small amounts</label>
+        <p><button class="fun" data-s="burner" disabled>Start with a browser wallet</button></p>
+      </section>
+      <section>
+        <h4>🦊 MetaMask</h4>
+        <p>Use the wallet you already have. Each transaction asks for your OK in MetaMask.</p>
+        <p><button class="fun" data-s="ext">Connect MetaMask</button></p>
+      </section>
+    </div>
+    <p><button class="ghost" data-s="close">Not now</button></p>`;
+  const ok = box.querySelector<HTMLInputElement>("#start-ok")!;
+  const go = box.querySelector<HTMLButtonElement>("[data-s=burner]")!;
+  ok.addEventListener("change", () => (go.disabled = !ok.checked));
+  go.addEventListener("click", () => {
+    useBurner();
+    store.set(MAINNET_WALLET, "burner");
+    box.innerHTML = "";
+    renderWallet();
+    void refreshBalance();
+    void render();
+  });
+  box.querySelector("[data-s=ext]")!.addEventListener("click", () => void connect());
+  box.querySelector("[data-s=close]")!.addEventListener("click", () => (box.hidden = true));
+}
+
+/** Send BOT from the browser wallet to another address; "max" leaves just the gas for this transfer. */
+async function sendOut() {
+  if (!walletClient || !me || !burner) return;
+  const to = prompt("Send BOT from this browser wallet to which address?")?.trim();
+  if (!to) return;
+  if (!isAddress(to)) return toast("That is not a valid address", true);
+  const bal = await pub.getBalance({ address: me });
+  const fee = (await pub.getGasPrice()) * 21000n * 2n;
+  const max = bal > fee ? bal - fee : 0n;
+  const amount = prompt(`How much BOT? (up to ${formatEther(max)}; type "max" for all of it)`, "max")?.trim();
+  if (!amount) return;
+  const value = amount === "max" ? max : parseEther(amount);
+  if (value <= 0n || value > max) return toast("Not enough BOT for that and the gas", true);
+  if (!confirm(`Send ${formatEther(value)} BOT to ${to}? This cannot be undone.`)) return;
+  try {
+    const hash = await walletClient.sendTransaction({ account: walletClient.account!, to, value, chain: chain() });
+    toast("Sent, waiting for the block…");
+    await pub.waitForTransactionReceipt({ hash });
+    toast("BOT sent");
+    void refreshBalance();
+  } catch (e) {
+    toast((e as { shortMessage?: string }).shortMessage || (e as Error).message, true);
+  }
+}
+
+/** The key as a small text file, so a backup does not depend on the clipboard. */
+function downloadKey() {
+  const key = store.get(burnerKeyName(chain().id));
+  if (!key || !me) return;
+  const text = `BOT Bazaar browser wallet backup\nNetwork: ${chain().name} (chain id ${chain().id})\nAddress: ${me}\nPrivate key: ${key}\n\nAnyone with this key controls the wallet. Keep this file private. Import it in MetaMask: Add account > Import account.\n`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  a.download = `bot-bazaar-wallet-${me.slice(2, 8)}.txt`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function depositQr(el: HTMLElement) {
+  if (!me) return;
+  const { default: qrcode } = await import("qrcode-generator");
+  const q = qrcode(0, "M");
+  q.addData(me);
+  q.make();
+  el.innerHTML = q.createSvgTag({ cellSize: 3, margin: 2, scalable: true });
+}
+
+/** Make or reuse this browser's key for the current network. It lives in localStorage only. */
 function useBurner() {
   const ch = chain();
   let key = store.get(burnerKeyName(ch.id)) as `0x${string}` | null;
@@ -233,7 +332,7 @@ async function getTestBot() {
 async function fundFromExtension() {
   const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
   if (!eth || !me) return toast("No browser extension wallet found", true);
-  const amount = prompt("How much test BOT to send to the browser wallet?", "0.1");
+  const amount = prompt(`How much ${networkKey === "mainnet" ? "" : "test "}BOT to send to the browser wallet?`, networkKey === "mainnet" ? "0.02" : "0.1");
   if (!amount) return;
   try {
     const ch = chain();
@@ -277,26 +376,40 @@ function renderWallet() {
   if (lowNote) lowNote.hidden = !low;
   const box = $("#wallet");
   if (box.hidden || !me) return;
+  const real = networkKey === "mainnet";
   box.innerHTML = `
     <h3>${burner ? "Browser wallet" : "Extension wallet"} <small class="muted">${esc(chain().name)}</small></h3>
     <p class="addr"><code>${me}</code> <button class="ghost" data-w="copy">Copy</button></p>
     <p>Balance <b>${balance === null ? "…" : bot(balance)}</b>${low ? ` <span class="warn">low</span>` : ""}</p>
     ${networkKey === "testnet" ? `<p><button data-w="faucet">Get test BOT</button> <span class="muted">copies your address and opens the faucet</span></p>` : ""}
+    ${burner && real ? `
+      <div class="deposit">
+        <div id="deposit-qr" aria-label="Deposit address as a QR code"></div>
+        <p><b>Deposit</b>: send BOT on ${esc(chain().name)} to the address above. A free design costs about ${PUBLISH_GAS} BOT of gas;
+          0.02 BOT is plenty. <span class="warn">Keep only small amounts here.</span>${balance === 0n ? " Publishing works once the first BOT arrives." : ""}</p>
+      </div>` : ""}
     ${burner ? `
-      <p><button class="ghost" data-w="fund">Send from MetaMask…</button></p>
+      <p><button class="ghost" data-w="fund">Send from MetaMask…</button>${real ? ` <button class="ghost" data-w="out">Send BOT out…</button>` : ""}</p>
       ${showKey
-        ? `<p class="muted">Private key (testnet only; anyone with it controls this wallet)</p>
+        ? `<p class="muted">Private key (${real ? "real BOT: keep it private, never paste it in a chat" : "testnet only"}; anyone with it controls this wallet)</p>
            <p><input id="wallet-key" readonly value="${esc(store.get(burnerKeyName(chain().id)) ?? "")}" /> <button data-w="key">Copy private key</button> <button class="ghost" data-w="hide">Hide</button></p>`
-        : `<p><button class="ghost" data-w="reveal">Show private key</button> <span class="muted">testnet only · import it elsewhere or use it as a deploy key</span></p>`}
+        : `<p><button class="ghost" data-w="reveal">${real ? "Back up key" : "Show private key"}</button>${real ? ` <button class="ghost" data-w="file">Download backup</button>` : ""}
+           <span class="muted">${real ? "the key lives only in this browser; save it to keep the wallet" : "testnet only · import it elsewhere or use it as a deploy key"}</span></p>`}
       <p><button class="ghost" data-w="ext">Use MetaMask instead</button></p>`
-    : networkKey === "testnet" ? `<p><button class="ghost" data-w="burner">Use the browser wallet</button></p>` : ""}`;
+    : networkKey === "testnet" || real ? `<p><button class="ghost" data-w="${real ? "start" : "burner"}">Use a browser wallet instead</button></p>` : ""}`;
+  if (burner && real) void depositQr($("#deposit-qr"));
   box.querySelectorAll<HTMLButtonElement>("[data-w]").forEach((b) =>
     b.addEventListener("click", async () => {
       const w = b.dataset.w;
       if (w === "copy") await navigator.clipboard.writeText(me!).then(() => toast("Address copied"), () => toast(me!));
       if (w === "faucet") await getTestBot();
       if (w === "fund") await fundFromExtension();
-      if (w === "reveal" && confirm("Show this browser wallet's private key? Anyone with it controls the wallet. Use it on testnet only.")) (showKey = true), renderWallet();
+      if (w === "reveal" && confirm(real
+        ? "Show this wallet's private key? Anyone who sees it can take its BOT. Save it somewhere private (a password manager), never in a chat or screenshot."
+        : "Show this browser wallet's private key? Anyone with it controls the wallet. Use it on testnet only.")) (showKey = true), renderWallet();
+      if (w === "file" && confirm("Download a text file with this wallet's private key? Keep the file private.")) downloadKey();
+      if (w === "out") await sendOut();
+      if (w === "start") showStart();
       if (w === "hide") (showKey = false), renderWallet();
       if (w === "key") await copyKey();
       if (w === "ext") await connect();
@@ -1091,6 +1204,9 @@ async function selectNetwork(key: Key) {
   pub = createPublicClient({ chain: ch, transport: http() }) as PublicClient;
   dep = deploymentFor(ch.id);
   if (key === "testnet" && store.get("bazaar-wallet") !== "extension") useBurner();
+  // Mainnet reopens the browser wallet only if the visitor chose it before (the key is already here).
+  if (key === "mainnet" && store.get(MAINNET_WALLET) === "burner" && store.get(burnerKeyName(ch.id))) useBurner();
+  if (burner) void refreshBalance();
   renderWallet();
   void render();
 }
@@ -1107,7 +1223,7 @@ $<HTMLSelectElement>("#persona").addEventListener("change", (e) => {
   void render();
 });
 $("#connect").addEventListener("click", () => {
-  if (!me) return void connect();
+  if (!me) return networkKey === "mainnet" ? showStart() : void connect();
   $("#wallet").hidden = !$("#wallet").hidden;
   showKey = false;
   $("#wallet").innerHTML = "";
