@@ -25,9 +25,10 @@ type Name = keyof Deployment["contracts"];
 const ABI = abiJson as unknown as Record<Name, readonly unknown[]>;
 
 const CATEGORIES = ["Goods (B2C)", "Service (B2B)", "Developer asset", "Agent service"];
-const TABS = ["bazaar", "shops", "requests", "botornot", "projects", "workshop", "account"] as const;
+// Pixel art is the main act (harry, 2026-10-14): the site opens on the workshop, the 3D bazaar is the next tab.
+const TABS = ["workshop", "bazaar", "shops", "requests", "botornot", "projects", "account"] as const;
 const TAB_LABEL: Record<string, string> = {
-  bazaar: "Bazaar", shops: "Shops", requests: "Requests", botornot: "Bot or Not", projects: "Projects", workshop: "Workshop", account: "Account",
+  workshop: "🎨 Workshop", bazaar: "Bazaar", shops: "Shops", requests: "Requests", botornot: "Bot or Not", projects: "Projects", account: "Account",
 };
 /** AgentPass.kindOf — self-declared, display only. The contracts treat every kind the same. */
 const KINDS = [
@@ -69,8 +70,11 @@ let networkKey: Key =
   (deploymentFor(NETWORKS.mainnet.id) ? "mainnet" : deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
 let demo: DemoChain | null = null;
 let demoChain: Chain | null = null;
-let tab: Tab = (location.hash.slice(1) as Tab) || "bazaar";
-if (!TABS.includes(tab)) tab = "bazaar";
+const tabFromHash = (): Tab => {
+  const t = location.hash.slice(1) as Tab;
+  return TABS.includes(t) ? t : TABS[0];
+};
+let tab: Tab = tabFromHash();
 let pub: PublicClient;
 let dep: Deployment | null = null;
 let walletClient: WalletClient | null = null;
@@ -155,9 +159,23 @@ function toast(msg: string, error = false) {
   setTimeout(() => t.remove(), 5000);
 }
 
+/** No injected wallet (most phones): say how to get one instead of failing silently. */
+function noWallet() {
+  const box = $("#wallet");
+  const here = `${location.host}${location.pathname}${location.search}`;
+  box.innerHTML = `
+    <h3>No wallet in this browser</h3>
+    <p>Drawing works without one. To publish or collect on ${esc(chain().name)} you need a wallet such as MetaMask.</p>
+    <p><a class="fun-link" href="https://metamask.app.link/dapp/${esc(here)}">Open in the MetaMask app</a> on a phone, or
+      <a href="https://metamask.io/download/" target="_blank" rel="noopener">install MetaMask</a> on a computer.</p>
+    <p><button class="ghost" data-close>Close</button></p>`;
+  box.hidden = false;
+  box.querySelector("[data-close]")!.addEventListener("click", () => (box.hidden = true));
+}
+
 async function connect() {
   const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
-  if (!eth) return toast("No browser wallet found (MetaMask, Rabby, OKX…)", true);
+  if (!eth) return noWallet();
   const ch = chain();
   const hex = `0x${ch.id.toString(16)}`;
   try {
@@ -419,75 +437,179 @@ async function viewProjects(el: HTMLElement) {
   });
 }
 
+// ---------- pixel workshop (the first screen) ----------
+/** Starter drawings, so the page opens on pixel art. Rows use the brush slots 0-3; `slots` picks PRESET16 colours. */
+const TEMPLATES: { name: string; slots: number[]; rows: string }[] = [
+  { name: "Robot", slots: [0, 8, 1, 5], rows: "...33...|...22...|.111111.|.121121.|.111111.|.122221.|.111111.|..1..1.." },
+  { name: "Heart", slots: [0, 1, 3, 11], rows: "........|.11.11..|1321221.|1222221.|.12221..|..121...|...1....|........" },
+  { name: "Tulip", slots: [0, 11, 5, 7], rows: "..1.1...|..111...|..121...|...3....|.3.3.3..|..333...|...3....|...3...." },
+  { name: "Mushroom", slots: [0, 3, 2, 12], rows: "..1111..|.112111.|11111211|12111111|..3333..|..3233..|..3333..|........" },
+];
+const fromRows = (rows: string) => rows.replace(/\|/g, "").split("").map((ch) => (ch === "." ? 0 : Number(ch)));
+const DRAFT = "bazaar-pixel-draft";
+/** The drawing in progress outlives re-renders (every transaction re-renders the view) and reloads. */
+const draft: { cells: number[]; slots: number[]; brush: number } = (() => {
+  try {
+    const d = JSON.parse(store.get(DRAFT) || "null");
+    if (d?.cells?.length === 64 && d?.slots?.length === 4) return { cells: d.cells, slots: d.slots, brush: 1 };
+  } catch {
+    /* fall through to the starter drawing */
+  }
+  return { cells: fromRows(TEMPLATES[0].rows), slots: [...TEMPLATES[0].slots], brush: 1 };
+})();
+const saveDraft = () => store.set(DRAFT, JSON.stringify({ cells: draft.cells, slots: draft.slots }));
+const artCanvas = (pixels: string, palette: number) => {
+  const cv = patternCanvas(pixels, palette, 16);
+  cv.className = "art";
+  return cv;
+};
+
+type DesignRow = { creator: Address; name: string; price: bigint; mints: number; pixels: string; palette: number };
+
 async function viewWorkshop(el: HTMLElement) {
-  const [ids, list] = await read<[bigint[], { creator: Address; name: string; price: bigint; mints: number; pixels: string; palette: number }[]]>(
-    "PixelWorkshop", "designsPage", [0n, 48n]);
-  // Mainnet's workshop is free-only; the testnet set predates the flag, so a failed read means priced designs are allowed.
-  const freeOnly = await read<boolean>("PixelWorkshop", "freeOnly").catch(() => false);
-  const cells = new Array<number>(64).fill(0);
-  let brush = 1;
-  const slots = [0, 1, 5, 3];
+  // The editor draws before any chain read, so the page shows pixel art even on a slow or failing RPC.
   el.innerHTML = `
-    <h2>Pixel workshop <small>free on-chain designs · gallery</small></h2>
-    <section class="editor">
-      <div id="canvas" class="pixels"></div>
-      <div>
-        <div id="slots"></div>
-        <form id="design"><input name="name" placeholder="Design name" maxlength="36" required />
-          ${freeOnly ? "" : `<input name="price" placeholder="Price in BOT (0 = free)" value="0" />`}
-          <button>Publish on-chain</button></form>
-      </div>
+    <section class="ws-hero">
+      <h2>Pixel Workshop</h2>
+      <p>Draw an 8×8 picture in four colours and publish it on BOT Chain. It lives on-chain for good, free to collect.</p>
+      <button type="button" class="fun ws-jump" data-jump>✏️ Draw your own</button>
     </section>
-    <h3>Gallery</h3>
-    <div class="gallery">${ids
-      .map(
-        (id, i) => `<figure data-id="${id}"><div class="thumb" data-pix="${list[i].pixels}:${list[i].palette}"></div>
-          <figcaption>${esc(list[i].name)}<br><small>${short(list[i].creator)} · ${list[i].mints} collected</small>
-          <button data-collect="${id}:${list[i].price}">${list[i].price ? bot(list[i].price) : "Collect free"}</button></figcaption></figure>`,
-      )
-      .join("") || "<p>No designs yet — draw the first.</p>"}</div>`;
-  el.querySelectorAll<HTMLElement>("[data-pix]").forEach((t) => {
-    const [px, pal] = t.dataset.pix!.split(":");
-    t.append(patternCanvas(px, Number(pal), 10));
-  });
-  const grid = $("#canvas");
-  const paint = () => {
-    grid.innerHTML = cells.map((v, i) => `<i data-i="${i}" style="background:${PRESET16[slots[v]]}"></i>`).join("");
-    $("#slots").innerHTML = slots
-      .map((p, s) => `<button class="swatch${s === brush ? " on" : ""}" data-slot="${s}" style="background:${PRESET16[p]}" title="Slot ${s}: click to paint, right-click to change colour"></button>`)
-      .join("");
+    <div class="ws">
+      <section class="ws-card ws-editor">
+        <h3>Draw</h3>
+        <div class="ws-templates">${TEMPLATES.map((t, i) => `<button type="button" class="chip" data-tpl="${i}">${t.name}</button>`).join("")}
+          <button type="button" class="chip" data-clear>Clear</button></div>
+        <div class="pixels" data-canvas></div>
+        <div class="ws-brushes" data-brushes></div>
+        <div class="ws-colours" data-colours></div>
+        <form class="ws-publish" data-publish>
+          <input name="name" placeholder="Name your design" maxlength="36" required />
+          <span data-price></span>
+          <button class="fun">Publish on-chain</button>
+        </form>
+        <p class="muted" data-note></p>
+      </section>
+      <section class="ws-gallery">
+        <h3>Gallery <small data-count></small></h3>
+        <div class="gallery" data-gallery>${'<figure class="ws-card skel"><div class="art"></div><figcaption>&nbsp;</figcaption></figure>'.repeat(3)}</div>
+      </section>
+    </div>`;
+  const q = <T extends HTMLElement>(s: string) => el.querySelector(s) as T;
+  const grid = q("[data-canvas]");
+  grid.innerHTML = draft.cells.map((_, i) => `<i data-i="${i}"></i>`).join("");
+  const cellEls = [...grid.children] as HTMLElement[];
+  const paintCell = (i: number) => {
+    const v = draft.cells[i];
+    cellEls[i].style.background = v ? PRESET16[draft.slots[v]] : "";
   };
-  paint();
-  grid.addEventListener("click", (e) => {
-    const i = (e.target as HTMLElement).dataset.i;
-    if (i === undefined) return;
-    cells[Number(i)] = cells[Number(i)] === brush ? 0 : brush;
-    paint();
-  });
-  $("#slots").addEventListener("click", (e) => {
-    const s = (e.target as HTMLElement).dataset.slot;
-    if (s !== undefined) (brush = Number(s)), paint();
-  });
-  $("#slots").addEventListener("contextmenu", (e) => {
-    const s = (e.target as HTMLElement).dataset.slot;
-    if (s === undefined || s === "0") return;
+  const paintAll = () => {
+    cellEls.forEach((_, i) => paintCell(i));
+    q("[data-brushes]").innerHTML = draft.slots
+      .map((p, s) => `<button type="button" class="swatch${s === draft.brush ? " on" : ""}${s === 0 ? " eraser" : ""}" data-slot="${s}"
+          style="${s ? `background:${PRESET16[p]}` : ""}" title="${s ? `Brush ${s}` : "Eraser"}" aria-label="${s ? `Brush ${s}` : "Eraser"}"></button>`)
+      .join("");
+    q("[data-colours]").innerHTML = draft.brush
+      ? PRESET16.slice(1).map((col, k) => `<button type="button" class="dot${draft.slots[draft.brush] === k + 1 ? " on" : ""}" data-col="${k + 1}"
+          style="background:${col}" aria-label="Colour ${k + 1}"></button>`).join("")
+      : `<span class="muted">Eraser: tap pixels to clear them.</span>`;
+    saveDraft();
+  };
+  paintAll();
+
+  // Drag to paint (mouse or finger). The first pixel decides whether this stroke paints or erases.
+  let stroke: number | null = null;
+  const at = (e: PointerEvent) => {
+    const t = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    return t?.parentElement === grid && t.dataset.i !== undefined ? Number(t.dataset.i) : null;
+  };
+  const apply = (i: number | null) => {
+    if (i === null || stroke === null || draft.cells[i] === stroke) return;
+    draft.cells[i] = stroke;
+    paintCell(i);
+  };
+  grid.addEventListener("pointerdown", (e) => {
+    const i = at(e);
+    if (i === null) return;
     e.preventDefault();
-    slots[Number(s)] = (slots[Number(s)] % 15) + 1;
-    paint();
+    grid.setPointerCapture(e.pointerId);
+    stroke = draft.cells[i] === draft.brush ? 0 : draft.brush;
+    apply(i);
   });
-  $("#design").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const f = new FormData(e.target as HTMLFormElement);
-    void busy((e as SubmitEvent).submitter, queueTx("Publish design", "PixelWorkshop", "register", [
-      f.get("name"), encodePixels(cells), encodePalette(slots), parseEther(String(f.get("price") || "0")),
-    ])).then(render);
+  grid.addEventListener("pointermove", (e) => stroke !== null && apply(at(e)));
+  const end = () => stroke !== null && ((stroke = null), saveDraft());
+  grid.addEventListener("pointerup", end);
+  grid.addEventListener("pointercancel", end);
+
+  q("[data-brushes]").addEventListener("click", (e) => {
+    const s = (e.target as HTMLElement).dataset.slot;
+    if (s !== undefined) (draft.brush = Number(s)), paintAll();
   });
-  el.querySelectorAll<HTMLButtonElement>("[data-collect]").forEach((b) =>
+  q("[data-colours]").addEventListener("click", (e) => {
+    const c = (e.target as HTMLElement).dataset.col;
+    if (c !== undefined && draft.brush) (draft.slots[draft.brush] = Number(c)), paintAll();
+  });
+  el.querySelectorAll<HTMLButtonElement>("[data-tpl]").forEach((b) =>
     b.addEventListener("click", () => {
-      const [id, price] = b.dataset.collect!.split(":");
-      void busy(b, queueTx("Collect", "PixelWorkshop", "collect", [BigInt(id)], BigInt(price))).then(render);
-    }),
-  );
+      const t = TEMPLATES[Number(b.dataset.tpl)];
+      draft.cells = fromRows(t.rows);
+      draft.slots = [...t.slots];
+      paintAll();
+    }));
+  // Phones show the gallery first; this jumps to the editor (a #hash link would switch tabs).
+  q("[data-jump]").addEventListener("click", () => q(".ws-editor").scrollIntoView({ behavior: "smooth" }));
+  q("[data-clear]").addEventListener("click", () => ((draft.cells = new Array(64).fill(0)), paintAll()));
+
+  q("[data-publish]").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    if (!draft.cells.some(Boolean)) return toast("Draw something first", true);
+    if (!me) await connect();
+    if (!me) return;
+    const f = new FormData(form);
+    void busy((e as SubmitEvent).submitter, queueTx("Publish design", "PixelWorkshop", "register", [
+      f.get("name"), encodePixels(draft.cells), encodePalette(draft.slots), parseEther(String(f.get("price") || "0")),
+    ])).then(() => (form.reset(), render()), () => undefined);
+  });
+
+  const gallery = q("[data-gallery]");
+  try {
+    // Mainnet's workshop is free-only; the testnet set predates the flag, so a failed read means priced designs are allowed.
+    const [[ids, list], freeOnly] = await Promise.all([
+      read<[bigint[], DesignRow[]]>("PixelWorkshop", "designsPage", [0n, 48n]),
+      read<boolean>("PixelWorkshop", "freeOnly").catch(() => false),
+    ]);
+    if (!freeOnly) q("[data-price]").innerHTML = `<input name="price" placeholder="Price in BOT (0 = free)" value="0" size="10" />`;
+    q("[data-note]").textContent = me
+      ? `Publishing sends one transaction from ${short(me)}${networkKey === "mainnet" ? " (gas is paid in real BOT)" : ""}.`
+      : "Publishing needs a wallet; you can draw without one.";
+    const owned = me ? await Promise.all(ids.map((id) => read<boolean>("PixelWorkshop", "ownedOf", [me, id]).catch(() => false))) : [];
+    q("[data-count]").textContent = ids.length ? `${ids.length} on-chain · newest first` : "";
+    gallery.innerHTML = ids
+      .map((id, i) => {
+        const d = list[i];
+        const mine = me && d.creator.toLowerCase() === me.toLowerCase();
+        const action = owned[i]
+          ? `<button disabled>${mine ? "Yours" : "✓ Collected"}</button>`
+          : `<button data-collect="${id}:${d.price}">${d.price ? bot(d.price) : "Collect free"}</button>`;
+        return `<figure class="ws-card" data-art="${d.pixels}:${d.palette}">
+          <figcaption><b>${esc(d.name)}</b><small>#${id} by ${short(d.creator)} · ${d.mints} collected</small>${action}</figcaption></figure>`;
+      })
+      .join("") || `<p class="ws-empty">No designs yet. Yours could be the first.</p>`;
+    gallery.querySelectorAll<HTMLElement>("[data-art]").forEach((fig) => {
+      const [px, pal] = fig.dataset.art!.split(":");
+      fig.prepend(artCanvas(px, Number(pal)));
+    });
+    gallery.querySelectorAll<HTMLButtonElement>("[data-collect]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (!me) await connect();
+        if (!me) return;
+        const [id, price] = b.dataset.collect!.split(":");
+        void busy(b, queueTx("Collect", "PixelWorkshop", "collect", [BigInt(id)], BigInt(price))).then(render, () => undefined);
+      }),
+    );
+  } catch (e) {
+    gallery.innerHTML = `<p class="error">Could not read the gallery from ${esc(chain().name)}: ${esc((e as { shortMessage?: string }).shortMessage || (e as Error).message)}</p>`;
+  }
 }
 
 type Purchase = readonly [Address, Address, bigint, bigint, boolean, boolean, bigint];
@@ -884,7 +1006,7 @@ async function render() {
   banner.hidden = false;
   if (networkKey === "mainnet") {
     banner.textContent = workshopOnly()
-      ? "BOT Chain mainnet: the Pixel Workshop is open. Publishing and collecting free designs costs only gas, paid in real BOT."
+      ? "BOT Chain mainnet · drawing is free; publishing or collecting a design costs a little gas in real BOT."
       : "BOT Chain mainnet: payments are real BOT.";
   } else if (demo) {
     banner.innerHTML = `Demo<span class="long">: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser.</span> · Clock ${new Date(
@@ -1008,7 +1130,7 @@ $("#panel-close").addEventListener("click", () => {
   void renderPanel();
 });
 addEventListener("hashchange", () => {
-  tab = (location.hash.slice(1) as Tab) || "shops";
+  tab = tabFromHash();
   void render();
 });
 void selectNetwork(networkKey).catch((e: Error) => {
