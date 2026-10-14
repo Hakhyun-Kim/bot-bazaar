@@ -370,7 +370,7 @@ async function copyKey() {
 function renderWallet() {
   const btn = $("#connect");
   btn.hidden = networkKey === "demo";
-  btn.textContent = me ? `${burner ? "👛 " : ""}${short(me)}${balance !== null ? ` · ${Number(formatEther(balance)).toFixed(3)}` : ""}` : "Connect wallet";
+  btn.innerHTML = me ? `${burner ? "👛 " : ""}${short(me)}${balance !== null ? `<span class="bal"> · ${Number(formatEther(balance)).toFixed(3)}</span>` : ""}` : "Connect wallet";
   const low = balance !== null && balance < LOW;
   const lowNote = document.querySelector<HTMLElement>("#low");
   if (lowNote) lowNote.hidden = !low;
