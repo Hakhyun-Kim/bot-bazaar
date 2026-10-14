@@ -160,3 +160,12 @@ button.fun:active { transform: translateY(2px); box-shadow: 0 1px 0 #3a2e3f; }
   .ws-hero h2 { font-size: 26px; }
   .gallery { grid-template-columns: repeat(2, 1fr); gap: 12px; }
 }
+.w-cta { position: absolute; top: 12px; left: 12px; z-index: 25; display: flex; align-items: center; gap: 10px; text-decoration: none; color: #3a2e3f;
+  background: #ffd166; border: 2.5px solid #3a2e3f; border-radius: 14px; box-shadow: 0 4px 0 #3a2e3f; padding: 6px 14px 7px;
+  font: 900 17px/1.2 ui-rounded, "Nunito", "Trebuchet MS", system-ui, sans-serif; }
+.w-cta > span:last-child { display: flex; flex-direction: column; }
+.w-cta-art:empty { display: none; }
+.w-cta-art canvas { display: block; width: 48px; height: 48px; image-rendering: pixelated; background: #fffaf0; border: 2px solid #3a2e3f; border-radius: 6px; }
+.w-cta small { font-size: 12px; font-weight: 700; color: #6b5d70; }
+.w-cta:active { transform: translateY(2px); box-shadow: 0 2px 0 #3a2e3f; }
+.w-sign.easel { border-top-color: #ffd166; }

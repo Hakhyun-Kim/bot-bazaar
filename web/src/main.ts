@@ -25,10 +25,11 @@ type Name = keyof Deployment["contracts"];
 const ABI = abiJson as unknown as Record<Name, readonly unknown[]>;
 
 const CATEGORIES = ["Goods (B2C)", "Service (B2B)", "Developer asset", "Agent service"];
-// Pixel art is the main act (harry, 2026-10-14): the site opens on the workshop, the 3D bazaar is the next tab.
-const TABS = ["workshop", "bazaar", "shops", "requests", "botornot", "projects", "account"] as const;
+// The 3D bazaar is the front door; the Pixel Workshop is the next tab and an easel inside the market
+// (harry, 2026-10-14: keep the game, make pixel art one step away).
+const TABS = ["bazaar", "workshop", "shops", "requests", "botornot", "projects", "account"] as const;
 const TAB_LABEL: Record<string, string> = {
-  workshop: "🎨 Workshop", bazaar: "Bazaar", shops: "Shops", requests: "Requests", botornot: "Bot or Not", projects: "Projects", account: "Account",
+  bazaar: "Bazaar", workshop: "🎨 Pixel Workshop", shops: "Shops", requests: "Requests", botornot: "Bot or Not", projects: "Projects", account: "Account",
 };
 /** AgentPass.kindOf — self-declared, display only. The contracts treat every kind the same. */
 const KINDS = [
@@ -103,9 +104,9 @@ function c(name: Name) {
   if (!at) throw new Error(`${name} is not deployed on this network`);
   return { address: at.address, abi: ABI[name] } as const;
 }
-/** A network with only the Pixel Workshop (the first mainnet version) shows just the workshop. */
+/** A network with only the Pixel Workshop (the first mainnet version) shows the 3D market with the rest marked coming soon. */
 const workshopOnly = () => !!dep && !dep.contracts.BazaarMarket;
-const tabsHere = (): readonly Tab[] => (workshopOnly() ? ["workshop"] : TABS);
+const tabsHere = (): readonly Tab[] => (workshopOnly() ? ["bazaar", "workshop"] : TABS);
 function read<T>(name: Name, functionName: string, args: unknown[] = []): Promise<T> {
   return pub.readContract({ ...c(name), functionName, args } as never) as Promise<T>;
 }
@@ -895,6 +896,11 @@ let panel: Target | null = null;
 const shopCache = new Map<Address, ShopData & { owner: Address }>();
 
 async function worldData(): Promise<WorldData> {
+  const [, designs] = await read<[bigint[], { name: string; pixels: string; palette: number }[]]>("PixelWorkshop", "designsPage", [0n, 48n]);
+  if (workshopOnly()) {
+    shopCache.clear();
+    return { me, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs: designs.slice(0, 8), projects: [], purchases: 0, soon: true };
+  }
   const [owners, shops] = await read<[Address[], ShopData[], bigint]>("BazaarMarket", "openShops", [0n, 100n]);
   const [, reqs] = await read<[bigint[], RequestData[], bigint]>("BazaarRequests", "openRequests", [0n, 20n]);
   const [players] = await read<[Address[], Score[]]>("BotOrNot", "players", [0n, 200n]);
@@ -908,7 +914,6 @@ async function worldData(): Promise<WorldData> {
       }),
     )
   ).filter((x) => x !== null);
-  const [, designs] = await read<[bigint[], { name: string; pixels: string; palette: number }[]]>("PixelWorkshop", "designsPage", [0n, 48n]);
   const [, projects] = await read<[bigint[], { name: string }[]]>("BazaarProjects", "projectsPage", [0n, 50n]);
   const purchases = await read<bigint>("BazaarMarket", "purchaseCount");
   const who = await whoIs([...owners, ...(me ? [me] : [])]);
@@ -928,9 +933,10 @@ async function worldData(): Promise<WorldData> {
     })),
     requests: reqs.map((r) => ({ title: r.title, reward: bot(r.reward), wants: r.wants })),
     rounds,
-    designs: [...designs].reverse().slice(0, 8),
+    designs: designs.slice(0, 8),
     projects: projects.map((p) => p.name),
     purchases: Number(purchases),
+    soon: false,
   };
 }
 
@@ -955,6 +961,13 @@ async function renderPanel() {
       const who = await whoIs([s.owner]);
       body.innerHTML = `<div class="grid">${shopCard(s, who.get(s.owner))}</div>`;
       bindShopButtons(body);
+    } else if (workshopOnly() && panel.tab !== "workshop") {
+      body.innerHTML = `<h2>Coming soon</h2>
+        <p>Shops, requests, escrow and Bot or Not are live on testnet and come to ${esc(chain().name)} next.
+          Right now the Pixel Workshop is open here.</p>
+        <p><button class="fun" data-go-workshop>🎨 Draw pixel art</button>
+          <a href="?network=testnet">Try the full bazaar on testnet</a></p>`;
+      body.querySelector("[data-go-workshop]")!.addEventListener("click", () => openPanel({ kind: "tab", tab: "workshop" }));
     } else await VIEWS[panel.tab](body);
   } catch (e) {
     body.innerHTML = `<p class="error">Could not read the chain: ${esc((e as Error).message)}</p>`;
@@ -973,7 +986,11 @@ async function viewBazaar() {
     const { mountWorld } = await import("./world/World");
     world = mountWorld($("#world"), openPanel);
   }
-  world.update(await worldData());
+  const d = await worldData();
+  world.update(d);
+  // The newest on-chain design rides on the workshop button, so pixel art shows from the first screen.
+  const art = $("#to-workshop .w-cta-art");
+  art.replaceChildren(...(d.designs[0] ? [patternCanvas(d.designs[0].pixels, d.designs[0].palette, 8)] : []));
   if (panel) await renderPanel();
 }
 
@@ -1006,7 +1023,7 @@ async function render() {
   banner.hidden = false;
   if (networkKey === "mainnet") {
     banner.textContent = workshopOnly()
-      ? "BOT Chain mainnet · drawing is free; publishing or collecting a design costs a little gas in real BOT."
+      ? "BOT Chain mainnet · the Pixel Workshop is open (gas only, in real BOT). Shops and Bot or Not are coming soon."
       : "BOT Chain mainnet: payments are real BOT.";
   } else if (demo) {
     banner.innerHTML = `Demo<span class="long">: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser.</span> · Clock ${new Date(

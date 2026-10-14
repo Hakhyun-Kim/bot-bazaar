@@ -32,6 +32,8 @@ export interface WorldData {
   designs: { name: string; pixels: string; palette: number }[];
   projects: string[];
   purchases: number;
+  /** Only the Pixel Workshop is deployed here (mainnet v1): the rest of the market shows as coming soon. */
+  soon: boolean;
 }
 export interface WorldApi {
   update(d: WorldData): void;
@@ -40,7 +42,7 @@ export interface WorldApi {
 }
 
 const EMPTY: WorldData = {
-  me: null, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs: [], projects: [], purchases: 0,
+  me: null, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs: [], projects: [], purchases: 0, soon: false,
 };
 /** Awning colours by category: goods, services, developer assets, agent services */
 const CAT = ["#ff8a5c", "#4fa8ff", "#5ccf7a", "#b98cff"];
@@ -345,6 +347,26 @@ function EmptyStall({ slot, open }: { slot: (typeof SLOTS)[number]; open: (t: Ta
   );
 }
 
+/** A shuttered stall for a network where shops are not open yet. */
+function SoonStall({ slot, open }: { slot: (typeof SLOTS)[number]; open: (t: Target) => void }) {
+  return (
+    <group position={[slot.x, 0, slot.z]} rotation={[0, slot.rot, 0]} {...clickable(() => open({ kind: "tab", tab: "account" }))}>
+      {[-1.35, 1.35].map((x) => (
+        <P key={x} color={WOOD_DARK} position={[x, 1.2, -0.7]}><cylinderGeometry args={[0.08, 0.09, 2.4, 10]} /></P>
+      ))}
+      <Awning color="#d9d2c3" />
+      <P color={WOOD} position={[0, 0.48, 0.7]}><boxGeometry args={[2.8, 0.96, 0.6]} /></P>
+      <P color="#e9b872" position={[0, 1.55, 0.95]} line={0.02}><boxGeometry args={[2.7, 1.1, 0.06]} /></P>
+      <Html position={[0, 3.1, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+        <div className="w-sign free">
+          <b>Shop</b>
+          <span>coming soon</span>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 /** Escrow as a parcel locker: paid goods wait in a box until the buyer says OK. */
 function EscrowLockers() {
   const d = useData();
@@ -380,7 +402,7 @@ function EscrowLockers() {
       <Html position={[0, 4.4, 0]} center distanceFactor={15} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-sign core">
           <b>📦 Escrow lockers</b>
-          <span>{d.purchases} order{d.purchases === 1 ? "" : "s"} · paid out when the buyer is happy</span>
+          <span>{d.soon ? "coming soon" : <>{d.purchases} order{d.purchases === 1 ? "" : "s"} · paid out when the buyer is happy</>}</span>
         </div>
       </Html>
     </group>
@@ -436,7 +458,7 @@ function RequestBoard({ open }: { open: (t: Target) => void }) {
               <span>{["Anyone", "Humans", "Bots"][r.wants]}</span> {r.title} <b>{r.reward}</b>
             </p>
           ))}
-          {!d.requests.length && <p>No open requests. Post the first!</p>}
+          {!d.requests.length && <p>{d.soon ? "Requests open here soon." : "No open requests. Post the first!"}</p>}
         </div>
       </Html>
     </group>
@@ -473,7 +495,7 @@ function BotOrNotStage({ open }: { open: (t: Target) => void }) {
         <div className="w-sign stage">
           <b>🎭 Bot or Not</b>
           <span>
-            {live ? `${short(live.trader)} · 🤖 ${live.bot} · 🧑 ${live.human}` : "Stage is free. Enter a round!"}
+            {live ? `${short(live.trader)} · 🤖 ${live.bot} · 🧑 ${live.human}` : d.soon ? "coming soon" : "Stage is free. Enter a round!"}
             {d.rounds.length > 1 ? ` · +${d.rounds.length - 1} more` : ""}
           </span>
         </div>
@@ -530,9 +552,9 @@ function PixelEasel({ open }: { open: (t: Target) => void }) {
         ))}
       </group>
       <Html position={[0, 4.5, 0]} center distanceFactor={14} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-        <div className="w-sign">
+        <div className="w-sign easel">
           <b>🎨 Pixel workshop</b>
-          <span>{design ? `“${design.name}” · ${d.designs.length} on chain` : "Draw the first design"}</span>
+          <span>{design ? `“${design.name}” · ${d.designs.length} on chain · click to draw` : "Draw the first design"}</span>
         </div>
       </Html>
     </group>
@@ -791,7 +813,8 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
 function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot | null) => void }) {
   const d = useData();
   const placed = d.shops.slice(0, SLOTS.length).map((shop, i) => ({ shop, slot: SLOTS[i] }));
-  const free = !d.myShop && d.me && placed.length < SLOTS.length ? SLOTS[placed.length] : null;
+  const free = !d.soon && !d.myShop && d.me && placed.length < SLOTS.length ? SLOTS[placed.length] : null;
+  const shut = d.soon ? SLOTS.slice(placed.length, placed.length + 6) : [];
   const spots = useMemo<Spot[]>(() => {
     const out: Spot[] = placed.map(({ shop, slot }) => ({ x: slot.x, z: slot.z, r: 1.7, name: shop.title, target: { kind: "shop", owner: shop.owner } }));
     if (free) out.push({ x: free.x, z: free.z, r: 1.7, name: "Free stall: open your shop", target: { kind: "tab", tab: "account" } });
@@ -828,6 +851,7 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
       <ProjectGate open={open} />
       {placed.map(({ shop, slot }) => <Stall key={shop.owner} shop={shop} slot={slot} open={open} />)}
       {free && <EmptyStall slot={free} open={open} />}
+      {shut.map((slot, i) => <SoonStall key={i} slot={slot} open={open} />)}
       <Player spots={spots} setNear={setNear} open={open} />
     </>
   );
@@ -835,6 +859,8 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
 
 function Root({ open }: { open: (t: Target) => void }) {
   const [near, setNear] = useState<Spot | null>(null);
+  const d = useData();
+  const touch = matchMedia("(pointer: coarse)").matches;
   return (
     <>
       <Canvas camera={{ position: [0, 7, 18.5], fov: 50 }} dpr={[1, 1.75]}>
@@ -846,7 +872,10 @@ function Root({ open }: { open: (t: Target) => void }) {
             Open {near.name} <kbd>F</kbd>
           </button>
         ) : (
-          <span>{matchMedia("(pointer: coarse)").matches ? "Tap the ground to walk, tap a stall to trade" : "WASD / arrows or click the ground to walk · click a stall to trade"}</span>
+          <span>
+            {touch ? "Tap the ground to walk" : "WASD / arrows or click the ground to walk"}
+            {d.soon ? " · tap the 🎨 easel to draw pixel art" : touch ? ", tap a stall to trade" : " · click a stall to trade"}
+          </span>
         )}
       </div>
     </>
