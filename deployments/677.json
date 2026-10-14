@@ -13,10 +13,42 @@
     }
   },
   "contracts": {
+    "BazaarMarket": {
+      "address": "0xa1de5cad2d48c9f78c5482e932e859dd740557bf",
+      "tx": "0x794292731e80d712c03e022c91471c31337c1df5d025c9985818aa7958cbb29e",
+      "block": 26708012
+    },
+    "BazaarOffers": {
+      "address": "0xb3a0e015a51a703b3c041ca16852369c39d8e362",
+      "tx": "0x985390dc64c0f16879a319f56cd7d1713e7824393c46a749cd3bfe07479f8465",
+      "block": 26708014
+    },
+    "BazaarRequests": {
+      "address": "0x172bb2be636440d35b56df4e684f751053bda7f0",
+      "tx": "0x62d4a1a731821ae013a2a275460eaf22c74ff537e01edbe230ed49ee6ac708ec",
+      "block": 26708017
+    },
+    "BazaarProjects": {
+      "address": "0x65b6e104060bb471c4bbbcffc46b35daf659ce18",
+      "tx": "0xd285724c3b9322ac3351f8c193ee87f2cc99fd9402910f7aaf95b1daf80399fb",
+      "block": 26708023
+    },
+    "AgentPass": {
+      "address": "0x2b556b459dcd47c9e8617fa6003f4b9fdfe5aadc",
+      "tx": "0xc9b492ecdc1ea0dbfa4662d3cd1e95afeb78081970ed558c334a1051c32e812c",
+      "block": 26708029
+    },
+    "BotOrNot": {
+      "address": "0x5facef258b07b7790c9375b47840465e0b47aaf1",
+      "tx": "0x8fb9598202e15bee17349905548b079edc2127c17ad987bf3b42923c6f3a2939",
+      "block": 26708031
+    },
     "PixelWorkshop": {
       "address": "0x48b1c637f7fe9fec89961577329657344311adbb",
       "tx": "0xaa1f6dde4fcd8c086a6841275da0a8dd8d447dcd7e84f7fe0008360df3cebfa6",
       "block": 26624911
     }
-  }
+  },
+  "maxAmount": "1000000000000000",
+  "marketDeployedAt": "2026-10-14T22:04:06.400Z"
 }
