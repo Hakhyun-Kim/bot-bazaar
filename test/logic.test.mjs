@@ -42,3 +42,19 @@ test("contracts carry English-only comments", () => {
     assert.ok(!/[가-힣]/.test(src), `${n}.sol has Korean text`);
   }
 });
+
+// CLAUDE.md rule 7: the 3D bazaar never disappears, whatever a network has deployed.
+test("every deployment, mainnet's workshop-only set included, opens on the 3D bazaar", async () => {
+  const { tabsFor } = await import("../web/src/screens.ts");
+  const dir = new URL("../deployments/", import.meta.url);
+  const sets = fs.readdirSync(dir).filter((f) => /^\d+\.json$/.test(f)).map((f) => JSON.parse(fs.readFileSync(new URL(f, dir), "utf8")));
+  assert.ok(sets.some((d) => d.chainId === 677), "mainnet deployment present");
+  for (const contracts of [...sets.map((d) => d.contracts), { PixelWorkshop: {} }, {}]) {
+    const tabs = tabsFor(contracts);
+    assert.equal(tabs[0], "bazaar", `3D bazaar first for ${Object.keys(contracts).join(",") || "nothing"}`);
+    assert.ok(tabs.includes("workshop"));
+  }
+  const html = fs.readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+  assert.ok(html.includes('id="stage"') && html.includes('id="world"'), "index.html keeps the 3D stage");
+  assert.ok(html.includes('id="to-workshop"'), "the 3D stage keeps its Pixel Workshop button");
+});

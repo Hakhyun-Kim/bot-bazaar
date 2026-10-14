@@ -326,7 +326,7 @@ DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --only PixelWorkshop --ye
 # add --reuse-testnet-key to deploy from a wallet that also deployed testnet (accepted risk)
 ```
 
-The site opens on the 3D bazaar; the Pixel Workshop (draw, publish, gallery) is one tap away from its button,
+The site opens on the 3D bazaar; the Pixel Workshop (draw, publish, gallery) opens as a panel over it from its button,
 the easel in the market or the next tab. On mainnet the rest of the market shows as coming soon.
 The first mainnet version is the Pixel Workshop alone (free designs and the gallery). `deploy.mjs` refuses a mainnet deploy from any wallet that deployed a
 testnet set, because that key also lives in a browser and a GitHub secret.

@@ -11,3 +11,7 @@
 5. **Scale work waits for users.** Indexers and caches are designed in docs/DESIGN.md §7, not built,
    unless the change makes the code smaller.
 6. Commit messages: what changed, why, and how it was verified.
+7. **The 3D bazaar never disappears.** It is the first screen on every network and deployment set
+   (mainnet included). Add new features as an entrance from the 3D screen (a stand, a button, a tab
+   next to it); a feature a network lacks shows disabled or "coming soon", never by hiding the 3D
+   screen. `npm test` checks this (`web/src/screens.ts`). (harry, 2026-10-14)
