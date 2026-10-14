@@ -56,16 +56,17 @@ const store = {
   },
 };
 
-// Testnet is the default (harry, 2026-10-11). "demo" runs the contracts on an EVM inside this page
-// (src/demo.ts) and is the fallback while testnet has no deployment.
+// Mainnet is the default since its launch (harry, 2026-10-14); testnet and the demo stay in the
+// network menu and open with ?network=testnet or ?network=demo. "demo" runs the contracts on an EVM
+// inside this page (src/demo.ts) and is the fallback when no network has a deployment.
 type Key = NetworkKey | "demo";
-const NETWORK_CHOICE = "bazaar-network-v2"; // v2: choices made while demo was the default are dropped
-// ?network=mainnet opens a network directly, so a launch link can point at mainnet without changing the default.
+const NETWORK_CHOICE = "bazaar-network-v3"; // v3: choices made while testnet was the default are dropped
+// ?network=testnet opens a network directly.
 const linked = new URLSearchParams(location.search).get("network") as Key | null;
 let networkKey: Key =
   (linked && (linked === "demo" || linked in NETWORKS) ? linked : null) ||
   (store.get(NETWORK_CHOICE) as Key) ||
-  (deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
+  (deploymentFor(NETWORKS.mainnet.id) ? "mainnet" : deploymentFor(NETWORKS.testnet.id) ? "testnet" : "demo");
 let demo: DemoChain | null = null;
 let demoChain: Chain | null = null;
 let tab: Tab = (location.hash.slice(1) as Tab) || "bazaar";

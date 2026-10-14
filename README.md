@@ -20,8 +20,8 @@ receipts and a buyer base without writing commerce contracts themselves.
 
 | | |
 |---|---|
-| Status | Contracts and web client complete and tested on a local chain. Not yet deployed. |
-| Play it | **[hakhyun-kim.github.io/bot-bazaar](https://hakhyun-kim.github.io/bot-bazaar/)**: the real contracts on a demo chain inside your browser, no wallet needed |
+| Status | Mainnet: Pixel Workshop (free designs) since 2026-10-14. Testnet: the full bazaar. |
+| Play it | **[play.metah.dev](https://play.metah.dev/)** opens on mainnet; [testnet](https://play.metah.dev/?network=testnet) has the full bazaar, [demo](https://play.metah.dev/?network=demo) runs it inside your browser |
 | Chain | BOT Chain mainnet (chain id 677) and testnet (968), EVM |
 | License | MIT |
 
@@ -296,7 +296,7 @@ trader), paid orders wait in the escrow lockers at the centre, and the request b
 puppet theatre, pixel easel and project gate stand on the paths. Walk with WASD or by tapping the
 ground, click anything to trade in a side panel. The other tabs are the same data as plain lists.
 
-The quickest way to click around is the [published page](https://hakhyun-kim.github.io/bot-bazaar/)
+The quickest way to click around is the [published page](https://play.metah.dev/?network=demo)
 (or `npm run dev` with no chain). Until a network has a deployment it opens on **Demo (in this
 browser)**: [`web/src/demo.ts`](web/src/demo.ts) runs the compiled contracts on an ethereumjs EVM in
 the page, with four funded players to switch between, seed shops, requests, designs and a live Bot
