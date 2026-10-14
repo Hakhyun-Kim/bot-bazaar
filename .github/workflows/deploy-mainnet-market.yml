@@ -1,0 +1,46 @@
+name: deploy-mainnet-market
+# Deploys the mainnet test version 0.1 of the market: the six contracts besides the Pixel Workshop
+# (already live), each escrow contract capped at 0.001 BOT per purchase, offer or request until the
+# contracts are audited. Merges the addresses into deployments/677.json and rebuilds the Pages site.
+#
+# Uses the repository secret DEPLOYER_KEY (same wallet as the mainnet Pixel Workshop, owner's choice
+# 2026-10-14), hence --reuse-testnet-key. Run it unchecked first: the dry run prints chain id,
+# deployer, balance and the cap.
+on:
+  workflow_dispatch:
+    inputs:
+      broadcast:
+        description: "Broadcast the six deployments (unchecked = dry run)"
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: deploy-mainnet
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Deploy the market (test version 0.1) to mainnet
+        env:
+          DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+        run: node scripts/deploy.mjs --network mainnet --add-market --max-amount 0.001 --reuse-testnet-key ${{ inputs.broadcast && '--yes' || '' }}
+      - name: Commit deployments/677.json and rebuild Pages
+        if: inputs.broadcast
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deployments/677.json
+          git commit -m "Deploy the market test version 0.1 to BOT Chain mainnet (677)" -m "Six contracts capped at 0.001 BOT per transaction, from the deploy-mainnet-market workflow, run ${GITHUB_RUN_ID}."
+          git pull --rebase origin main
+          git push origin HEAD:main
+          gh workflow run pages.yml --ref main
