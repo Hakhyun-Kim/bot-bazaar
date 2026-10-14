@@ -1,5 +1,6 @@
 name: pages
-# Publishes the web client to the gh-pages branch, served at https://hakhyun-kim.github.io/bot-bazaar/.
+# Publishes the web client to the gh-pages branch, served at https://hakhyun-kim.github.io/bot-bazaar/
+# (and at a custom domain once web/public/CNAME exists). Relative base works for both.
 # With no deployment for a network it opens on the in-browser demo chain, so the page plays as is.
 on:
   push:
@@ -22,7 +23,7 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          VITE_BASE: /bot-bazaar/
+          VITE_BASE: ./
       - run: touch web/dist/.nojekyll
       - name: Push web/dist to gh-pages
         run: |
