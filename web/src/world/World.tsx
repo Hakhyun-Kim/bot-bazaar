@@ -31,7 +31,9 @@ export interface WorldData {
   shops: WorldShop[];
   requests: { title: string; reward: string; wants: number }[];
   rounds: { trader: string; bot: number; human: number }[];
-  designs: { name: string; pixels: string; palette: number }[];
+  designs: { id: number; name: string; pixels: string; palette: number; creator: string; createdAt: number }[];
+  /** Real on-chain numbers for the billboard (see designFeed in main.ts). */
+  stats: { total: number; day: string; artists: string; now: number };
   projects: string[];
   purchases: number;
   /** Only the Pixel Workshop is deployed here (mainnet v1): the rest of the market shows as coming soon. */
@@ -40,14 +42,18 @@ export interface WorldData {
 export interface WorldApi {
   update(d: WorldData): void;
   pulse(): void;
+  /** Designs that went on chain while the market was open: a banner, and the residents notice. */
+  announce(designs: WorldData["designs"]): void;
   /** Something outside the 3D scene (the Pixel Workshop button) counts toward today's errand. */
   errand(id: ErrandId): void;
   destroy(): void;
 }
 
 const EMPTY: WorldData = {
-  me: null, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs: [], projects: [], purchases: 0, soon: false,
+  me: null, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs: [], stats: { total: 0, day: "0", artists: "0", now: 0 }, projects: [], purchases: 0, soon: false,
 };
+const ago = (sec: number) =>
+  sec < 90 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} d ago`;
 /** Awning colours by category: goods, services, developer assets, agent services */
 const CAT = ["#ff8a5c", "#4fa8ff", "#5ccf7a", "#b98cff"];
 const CAT_NAME = ["Goods", "Service", "Dev asset", "Agent service"];
@@ -152,7 +158,11 @@ interface Resident {
   home: [number, number];
   ring: number;
   speed: number;
+  /** Who or what they look at while standing still (when the player is not close). */
+  face?: [number, number];
   lines: string[];
+  /** Said now and then without being asked, so the market sounds busy. NPCs only, never posing as visitors. */
+  idle?: string[];
 }
 const RESIDENTS: Resident[] = [
   {
@@ -193,6 +203,25 @@ const RESIDENTS: Resident[] = [
       "Hello! Nice day for the market, isn't it?",
     ],
   },
+  {
+    id: "ari", name: "Ari", kind: 2, address: "0xa1a1000000000000000000000000000000000a1a", home: [-15.0, 2.6], ring: 0, speed: 0, face: [-18, 0],
+    lines: [
+      "I'm copying the easel, square by square. Don't look yet!",
+      "Tip: pick your four colours first. Then the drawing gets easy.",
+      "Every design gets its own frame in the market. I check them every morning.",
+    ],
+    idle: ["Hmm, one more blue square…", "Almost done!", "Oops. That pixel was meant to be pink."],
+  },
+  {
+    id: "kip", name: "Kip", kind: 1, address: "0x4b1b000000000000000000000000000000000b1b", home: [-3.0, -13.6], ring: 0, speed: 0, face: [-1.6, -14.4],
+    lines: ["We're arguing about which frame is the best one.", "Dot thinks robots draw better. I'm not so sure."],
+    idle: ["Dot, did you see the new frame?", "I'd hang mine right next to the board.", "Ha! Good one, Dot."],
+  },
+  {
+    id: "dot", name: "Dot", kind: 2, address: "0xd07d000000000000000000000000000000000d07", home: [-1.6, -14.4], ring: 0, speed: 0, face: [-3.0, -13.6],
+    lines: ["Beep. I mean: hello!", "I counted the frames twice. Then I counted them again."],
+    idle: ["Kip, the theatre is open for practice!", "Robots draw straighter lines. Fact.", "Beep boop. Just kidding."],
+  },
 ];
 /** Where each resident stands right now, written by their frame loop, read by the player's. */
 const residentAt = new Map<string, { x: number; z: number }>();
@@ -232,6 +261,40 @@ function talk(r: Resident) {
   bubbles.set(r.id, { text: r.lines[i % r.lines.length], until: performance.now() + 5200 });
   chatEmit();
   finishErrand("talk");
+}
+
+/** A line said unasked. Bolt reads the real numbers off the billboard. */
+function idleLine(r: Resident): string {
+  const st = data.stats;
+  if (r.id === "bolt" && st.total) return Math.random() < 0.5 ? `${st.total} designs on BOT Chain so far. ${st.day} in the last day!` : "Hi there! Tap me if you need a tip.";
+  const pool = r.idle ?? r.lines;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function chatter() {
+  const now = performance.now();
+  const near = RESIDENTS.filter((r) => {
+    const at = residentAt.get(r.id);
+    const b = bubbles.get(r.id);
+    return at && Math.hypot(at.x - player.x, at.z - player.z) < 16 && !(b && b.until > now);
+  });
+  if (!near.length) return;
+  const r = near[Math.floor(Math.random() * near.length)];
+  bubbles.set(r.id, { text: idleLine(r), until: now + 3800 });
+  chatEmit();
+}
+
+/** Designs that went on chain while the market is open: a banner, and the residents close by react. */
+let news: { text: string; until: number } | null = null;
+function announce(list: WorldData["designs"]) {
+  if (!list.length) return;
+  const d = list[0];
+  const now = performance.now();
+  news = { text: `🆕 “${d.name}” just went on BOT Chain · by ${short(d.creator)}${list.length > 1 ? ` · +${list.length - 1} more` : ""}`, until: now + 7000 };
+  for (const r of RESIDENTS) {
+    const at = residentAt.get(r.id);
+    if (at && Math.hypot(at.x - player.x, at.z - player.z) < 16) bubbles.set(r.id, { text: `Ooh, a new frame: “${d.name}”!`, emote: "👏", until: now + 3000 });
+  }
+  chatEmit();
 }
 
 /** The player emotes; residents close by join in a beat later (GIWA Village's "together"). */
@@ -512,7 +575,7 @@ function GalleryStand({ slot, design, n, open }: { slot: (typeof SLOTS)[number];
       <Html position={[0, 3.25, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className={`w-sign gallery${design ? "" : " free"}`} style={{ borderTopColor: color }}>
           <b>{design ? `🖼️ “${design.name}”` : "🖼️ Empty frame"}</b>
-          <span>{design ? "on BOT Chain · tap to draw yours" : "publish a design to hang here"}</span>
+          <span>{design ? `by ${short(design.creator)} · ${ago(data.stats.now - design.createdAt)}` : "publish a design to hang here"}</span>
         </div>
       </Html>
     </group>
@@ -545,6 +608,7 @@ function ResidentFigure({ r, open }: { r: Resident; open: () => void }) {
     const moving = Math.hypot(x - g.current.position.x, z - g.current.position.z) > 0.0005;
     if (moving) g.current.rotation.y = Math.atan2(x - g.current.position.x, z - g.current.position.z);
     else if (close) g.current.rotation.y = Math.atan2(player.x - x, player.z - z);
+    else if (r.face) g.current.rotation.y = Math.atan2(r.face[0] - x, r.face[1] - z);
     g.current.position.set(x, 0, z);
     residentAt.set(r.id, { x, z });
     if (body.current) emoteMotion(body.current, b, t.current);
@@ -555,7 +619,7 @@ function ResidentFigure({ r, open }: { r: Resident; open: () => void }) {
         <Trader kind={r.kind} address={r.address} />
       </group>
       <Html position={[0, 2.25, 0]} center distanceFactor={12} zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
-        {bubble ? <div className="w-say">{bubble.text}</div> : <div className="w-name">{r.name}</div>}
+        {bubble ? <div className="w-say"><small>{r.name} <i>NPC</i></small>{bubble.text}</div> : <div className="w-name">{r.name} <i>NPC</i></div>}
       </Html>
     </group>
   );
@@ -781,7 +845,7 @@ function PixelEasel({ open }: { open: (t: Target) => void }) {
       <Html position={[0, 4.5, 0]} center distanceFactor={14} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-sign easel">
           <b>🎨 Pixel workshop</b>
-          <span>{design ? `“${design.name}” · ${d.designs.length} on chain · click to draw` : "Draw the first design"}</span>
+          <span>{design ? `“${design.name}” · ${d.stats.total} on chain · click to draw` : "Draw the first design"}</span>
         </div>
       </Html>
     </group>
@@ -801,7 +865,7 @@ function ProjectGate({ open }: { open: (t: Target) => void }) {
       <Html position={[0, 6.6, 0.3]} center distanceFactor={26} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-gate">
           <b>BOT BAZAAR</b>
-          <span>{d.projects.length ? `districts: ${d.projects.slice(0, 3).join(" · ")}` : "no fee · no token · escrow on chain"}</span>
+          <span>{d.projects.length ? `districts: ${d.projects.slice(0, 3).join(" · ")}` : d.stats.total ? `🎨 ${d.stats.total} designs on BOT Chain · ${d.stats.artists} artists` : "no fee · no token · escrow on chain"}</span>
         </div>
       </Html>
     </group>
@@ -1108,6 +1172,10 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
 function Root({ open }: { open: (t: Target) => void }) {
   const [near, setNear] = useState<Spot | null>(null);
   const d = useData();
+  useEffect(() => {
+    const id = setInterval(() => document.hidden || chatter(), 5200);
+    return () => clearInterval(id);
+  }, []);
   const touch = matchMedia("(pointer: coarse)").matches;
   return (
     <>
@@ -1115,6 +1183,7 @@ function Root({ open }: { open: (t: Target) => void }) {
         <Scene open={open} setNear={setNear} />
       </Canvas>
       <ErrandChip />
+      <Billboard />
       <div className="w-emotes" role="toolbar" aria-label="Emotes">
         {EMOTES.map((e) => (
           <button key={e.icon} type="button" title={e.name} aria-label={e.name} onClick={() => doEmote(e.icon)}>{e.icon}</button>
@@ -1133,6 +1202,35 @@ function Root({ open }: { open: (t: Target) => void }) {
         )}
       </div>
     </>
+  );
+}
+
+/** The market's LED billboard: real on-chain numbers only, and news when a design arrives. */
+function Billboard() {
+  const d = useData();
+  useChat();
+  const [, tick] = useState(0);
+  const live = news && news.until > performance.now() ? news : null;
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => tick((v) => v + 1), live.until - performance.now() + 30);
+    return () => clearTimeout(t);
+  }, [live]);
+  const st = d.stats;
+  const newest = d.designs[0];
+  if (!st.total && !live) return null;
+  const text = live
+    ? live.text
+    : [
+        `🎨 ${st.total} design${st.total === 1 ? "" : "s"} on BOT Chain`,
+        `⏱️ ${st.day} in the last 24 h`,
+        `🧑‍🎨 ${st.artists} artist${st.artists === "1" ? "" : "s"}`,
+        newest ? `🖼️ newest “${newest.name}” by ${short(newest.creator)}, ${ago(st.now - newest.createdAt)}` : "",
+      ].filter(Boolean).join("   ·   ");
+  return (
+    <div className={`w-ticker${live ? " news" : ""}`} aria-live="polite">
+      <span key={text}>{text}</span>
+    </div>
   );
 }
 
@@ -1162,6 +1260,9 @@ export function mountWorld(el: HTMLElement, open: (t: Target) => void): WorldApi
     },
     errand(id) {
       finishErrand(id);
+    },
+    announce(list) {
+      announce(list);
     },
     destroy() {
       root.unmount();

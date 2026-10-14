@@ -793,11 +793,33 @@ let world: WorldApi | null = null;
 let panel: Target | null = null;
 const shopCache = new Map<Address, ShopData & { owner: Address }>();
 
+const FEED_PAGE = 48;
+/** The newest designs and real activity numbers for the market's billboard. "Last 24h" and
+ *  "artists" are counted over the newest page only, so a full page shows as "48+". */
+async function designFeed(): Promise<Pick<WorldData, "designs" | "stats">> {
+  const [ids, list] = await read<[bigint[], { creator: Address; createdAt: bigint; name: string; pixels: string; palette: number }[]]>(
+    "PixelWorkshop", "designsPage", [0n, BigInt(FEED_PAGE)]);
+  const total = Number(await read<bigint>("PixelWorkshop", "designCount"));
+  const now = Number(nowSec());
+  const full = list.length >= FEED_PAGE;
+  const day = list.filter((d) => now - Number(d.createdAt) < 86400).length;
+  return {
+    designs: list.slice(0, 8).map((d, i) => ({ id: Number(ids[i]), name: d.name, pixels: d.pixels, palette: d.palette, creator: d.creator, createdAt: Number(d.createdAt) })),
+    stats: {
+      total,
+      day: full && day === list.length ? `${day}+` : String(day),
+      artists: `${new Set(list.map((d) => d.creator.toLowerCase())).size}${full ? "+" : ""}`,
+      now,
+    },
+  };
+}
+
 async function worldData(): Promise<WorldData> {
-  const [, designs] = await read<[bigint[], { name: string; pixels: string; palette: number }[]]>("PixelWorkshop", "designsPage", [0n, 48n]);
+  const { designs, stats } = await designFeed();
+  seenDesigns = Math.max(seenDesigns, stats.total);
   if (workshopOnly()) {
     shopCache.clear();
-    return { me, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs: designs.slice(0, 8), projects: [], purchases: 0, soon: true };
+    return { me, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs, stats, projects: [], purchases: 0, soon: true };
   }
   const [owners, shops] = await read<[Address[], ShopData[], bigint]>("BazaarMarket", "openShops", [0n, 100n]);
   const [, reqs] = await read<[bigint[], RequestData[], bigint]>("BazaarRequests", "openRequests", [0n, 20n]);
@@ -831,12 +853,30 @@ async function worldData(): Promise<WorldData> {
     })),
     requests: reqs.map((r) => ({ title: r.title, reward: bot(r.reward), wants: r.wants })),
     rounds,
-    designs: designs.slice(0, 8),
+    designs,
+    stats,
     projects: projects.map((p) => p.name),
     purchases: Number(purchases),
     soon: false,
   };
 }
+
+/** New designs show up in the market while it is open: one cheap read every 30 s while the 3D
+ *  market is on screen, and a full refresh only when the count changed. */
+let seenDesigns = 0;
+setInterval(async () => {
+  if (tab !== "bazaar" || !dep?.contracts.PixelWorkshop || !world || document.hidden) return;
+  try {
+    const n = Number(await read<bigint>("PixelWorkshop", "designCount"));
+    if (n <= seenDesigns) return;
+    const before = seenDesigns;
+    const d = await worldData();
+    world.update(d);
+    world.announce(d.designs.filter((x) => x.id >= before));
+  } catch {
+    /* offline for a moment: try again next round */
+  }
+}, 30_000);
 
 function openPanel(t: Target) {
   panel = t;
