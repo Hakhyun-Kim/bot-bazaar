@@ -355,6 +355,49 @@ await check("closing removes the shop from the open index", async () => {
   eq((await read("BazaarMarket", "openShops", [0n, 10n]))[2], 0n);
 });
 
+console.log("\nmainnet test version (capped at 0.001 BOT, no workshop)");
+const CAP = parseEther("0.001");
+const capped = await deployAll({ pub: node.pub, wallet: deployer, artifacts, maxAmount: CAP, skipWorkshop: true });
+const cat = (name) => ({ address: capped[name].address, abi: artifacts[name].abi });
+async function cwrite(w, name, functionName, args = [], value) {
+  const { request } = await node.pub.simulateContract({ ...cat(name), functionName, args, value, account: w.account });
+  const r = await node.pub.waitForTransactionReceipt({ hash: await w.writeContract(request) });
+  if (r.status !== "success") throw new Error(`${functionName} reverted`);
+}
+async function creverts(w, name, functionName, args = [], value, reason) {
+  try {
+    await node.pub.simulateContract({ ...cat(name), functionName, args, value, account: w.account });
+  } catch (e) {
+    if (reason && !String(e.message).includes(reason)) throw new Error(`reverted, but not with "${reason}": ${e.shortMessage}`);
+    return;
+  }
+  throw new Error(`${functionName} should revert`);
+}
+await check("deploys six without a workshop; every escrow contract reports the cap", async () => {
+  eq(capped.PixelWorkshop, undefined, "workshop");
+  for (const n of ["BazaarMarket", "BazaarOffers", "BazaarRequests"]) {
+    eq(await node.pub.readContract({ ...cat(n), functionName: "maxAmount" }), CAP, n);
+  }
+});
+await check("listings and shop prices above the cap are refused; at the cap they work", async () => {
+  await creverts(seller, "BazaarMarket", "list", ["Big", CAP + 1n], undefined, "OverCap");
+  await creverts(seller, "BazaarMarket", "openShop", ["t", "", 0, 0, [{ name: "a", price: CAP + 1n }]], undefined, "OverCap");
+  await cwrite(seller, "BazaarMarket", "openShop", ["Tiny", "", 0, 0, [{ name: "a", price: CAP }]]);
+  await cwrite(buyer, "BazaarMarket", "buyItem", [addr(seller), 0], CAP);
+  await cwrite(buyer, "BazaarMarket", "confirm", [0n]);
+});
+await check("offers above the cap are refused; an accepted offer at the cap settles", async () => {
+  await creverts(buyer, "BazaarOffers", "makeOffer", [addr(seller), "a"], CAP + 1n, "cap");
+  await cwrite(buyer, "BazaarOffers", "makeOffer", [addr(seller), "a"], CAP);
+  await cwrite(seller, "BazaarOffers", "acceptOffer", [0n]);
+  eq(await node.pub.readContract({ ...cat("BazaarMarket"), functionName: "purchaseCount" }), 2n, "purchases");
+});
+await check("request rewards above the cap are refused", async () => {
+  const due = BigInt((await node.pub.getBlock()).timestamp) + 3n * BigInt(DAY);
+  await creverts(buyer, "BazaarRequests", "post", ["Big job", "", 0, due], CAP + 1n, "cap");
+  await cwrite(buyer, "BazaarRequests", "post", ["Small job", "", 0, due], CAP);
+});
+
 node.stop();
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) process.exit(1);

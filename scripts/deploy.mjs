@@ -4,6 +4,12 @@
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network testnet --yes    # broadcast
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network mainnet --only PixelWorkshop --yes
 //
+//   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network mainnet --add-market --max-amount 0.001 --yes
+//
+// --add-market deploys the other six onto a chain whose deployments/<id>.json already has a
+// PixelWorkshop, and merges them into that file. --max-amount (in BOT) caps every purchase, offer
+// and request reward; the mainnet test version (0.1) uses 0.001 BOT until the contracts are audited.
+//
 // --only PixelWorkshop deploys the workshop alone (the first mainnet version: free designs and the
 // gallery, no market or escrow). The workshop has no constructor arguments and no links to the others.
 //
@@ -12,7 +18,7 @@
 // the web client imports. Refuses to run if the RPC reports a different chain id.
 import fs from "node:fs";
 import path from "node:path";
-import { createPublicClient, createWalletClient, formatEther, http } from "viem";
+import { createPublicClient, createWalletClient, formatEther, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { ROOT, SETTINGS, SOLC_VERSION, compileAll } from "./lib/compile.mjs";
 import { deployAll, deployOne } from "./lib/localchain.mjs";
@@ -26,6 +32,12 @@ const opt = (k) => {
 const network = opt("--network") || "testnet";
 const yes = argv.includes("--yes");
 const only = opt("--only");
+const addMarket = argv.includes("--add-market");
+const maxAmount = opt("--max-amount") ? parseEther(opt("--max-amount")) : 0n;
+if (network === "mainnet" && !only && maxAmount === 0n) {
+  console.error("Mainnet market contracts need --max-amount until they are audited (e.g. --max-amount 0.001). Stopping.");
+  process.exit(1);
+}
 if (only && only !== "PixelWorkshop") {
   console.error(`--only supports PixelWorkshop (the others are wired to each other). Got "${only}".`);
   process.exit(1);
@@ -62,21 +74,32 @@ if (rpcId !== chain.id) {
   process.exit(1);
 }
 const file = path.join(ROOT, "deployments", `${chain.id}.json`);
-if (fs.existsSync(file) && !argv.includes("--force")) {
+const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
+if (addMarket) {
+  if (!existing?.contracts?.PixelWorkshop) {
+    console.error(`--add-market needs ${path.relative(ROOT, file)} with a PixelWorkshop. Stopping.`);
+    process.exit(1);
+  }
+  if (existing.contracts.BazaarMarket) {
+    console.error(`${path.relative(ROOT, file)} already has BazaarMarket. Stopping.`);
+    process.exit(1);
+  }
+} else if (existing && !argv.includes("--force")) {
   console.error(`${path.relative(ROOT, file)} exists. Pass --force to deploy a fresh set.`);
   process.exit(1);
 }
 const all = compileAll();
-const artifacts = only ? { [only]: all[only] } : all;
+const artifacts = only ? { [only]: all[only] } : addMarket ? Object.fromEntries(Object.entries(all).filter(([n]) => n !== "PixelWorkshop")) : all;
 const bal = await pub.getBalance({ address: account.address });
 console.log(`${chain.name} (${chain.id}) · deployer ${account.address} · ${formatEther(bal)} BOT`);
 for (const [n, a] of Object.entries(artifacts)) console.log(`  ${n.padEnd(15)} ${(a.size / 1024).toFixed(1)} KB`);
+if (!only) console.log(`  cap per purchase, offer and request: ${maxAmount ? `${formatEther(maxAmount)} BOT` : "none"}`);
 if (bal === 0n) {
   console.error(`No BOT for gas.${NETWORKS[network].faucet ? ` Faucet: ${NETWORKS[network].faucet}` : ""}`);
   process.exit(1);
 }
 if (!yes) {
-  console.log(`\nDry run. Add --yes to broadcast ${only ? `the ${only} deployment` : "seven deployments"}.`);
+  console.log(`\nDry run. Add --yes to broadcast ${only ? `the ${only} deployment` : addMarket ? "six deployments" : "seven deployments"}.`);
   process.exit(0);
 }
 const log = (l) => console.log(`  ${l}`);
@@ -84,11 +107,17 @@ const log = (l) => console.log(`  ${l}`);
 const freeOnly = network === "mainnet";
 const contracts = only
   ? await deployOne({ pub, wallet, artifacts, name: only, args: [freeOnly], log })
-  : await deployAll({ pub, wallet, artifacts, freeOnly, log });
-const record = {
+  : await deployAll({ pub, wallet, artifacts, freeOnly, maxAmount, skipWorkshop: addMarket, log });
+const record = addMarket ? {
+  ...existing,
+  maxAmount: maxAmount.toString(),
+  marketDeployedAt: new Date().toISOString(),
+  contracts: { ...contracts, PixelWorkshop: existing.contracts.PixelWorkshop },
+} : {
   chainId: chain.id,
   network,
   freeOnly,
+  ...(maxAmount ? { maxAmount: maxAmount.toString() } : {}),
   deployer: account.address,
   deployedAt: new Date().toISOString(),
   compiler: { solc: SOLC_VERSION, evmVersion: SETTINGS.evmVersion, optimizer: SETTINGS.optimizer },

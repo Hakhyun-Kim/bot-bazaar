@@ -113,8 +113,19 @@ contract BazaarMarket {
     /// Offers contract — the deploy script passes the address predicted from the next nonce (no setter)
     address public immutable offers;
 
-    constructor(address offers_) {
+    /// Most BOT one purchase or listed price may carry, in wei; 0 = no cap. Set once at deployment
+    /// (the mainnet test version uses a tiny cap so a bug can only ever touch small amounts).
+    uint128 public immutable maxAmount;
+
+    error OverCap(uint256 cap, uint256 amount);
+
+    constructor(address offers_, uint128 maxAmount_) {
         offers = offers_;
+        maxAmount = maxAmount_;
+    }
+
+    function _capped(uint256 amount) private view {
+        if (maxAmount != 0 && amount > maxAmount) revert OverCap(maxAmount, amount);
     }
 
     // ---------- receipt metadata (on-chain JSON) ----------
@@ -189,6 +200,7 @@ contract BazaarMarket {
 
     function list(string calldata itemId, uint128 price) external {
         require(price > 0, "price");
+        _capped(price);
         require(bytes(itemId).length >= 1 && bytes(itemId).length <= 48, "name");
         _listings[msg.sender][keccak256(bytes(itemId))] = Listing(price, true);
         emit Listed(msg.sender, itemId, price);
@@ -260,6 +272,7 @@ contract BazaarMarket {
         delete s.items;
         for (uint256 i; i < items.length; i++) {
             require(items[i].price > 0, "price");
+            _capped(items[i].price);
             require(bytes(items[i].name).length >= 1 && bytes(items[i].name).length <= 48, "name");
             s.items.push(items[i]);
         }
@@ -333,6 +346,7 @@ contract BazaarMarket {
         uint256 amount
     ) private returns (uint256 purchaseId) {
         require(seller != address(0) && seller != buyer, "seller");
+        _capped(amount);
         uint256 tid = tokenIdOf(seller, itemId);
         if (_coupons[tid].seller == address(0)) _coupons[tid] = CouponMeta(seller, itemId);
         purchaseId = _purchases.length;

@@ -40,8 +40,12 @@ contract BazaarOffers {
     event OfferCancelled(uint256 indexed id);
     event OfferAccepted(uint256 indexed id, uint256 purchaseId);
 
-    constructor(address market_) {
+    /// Most BOT one offer may lock, in wei; 0 = no cap. Same value as the market's cap.
+    uint128 public immutable maxAmount;
+
+    constructor(address market_, uint128 maxAmount_) {
         market = IBazaarMarket(market_);
+        maxAmount = maxAmount_;
     }
 
     function makeOffer(address payable seller, string calldata itemName)
@@ -51,6 +55,7 @@ contract BazaarOffers {
     {
         require(seller != address(0) && seller != msg.sender, "seller");
         require(msg.value > 0 && msg.value <= type(uint128).max, "value");
+        require(maxAmount == 0 || msg.value <= maxAmount, "cap");
         require(bytes(itemName).length >= 1 && bytes(itemName).length <= 48, "name");
         id = _offers.length;
         _offers.push(

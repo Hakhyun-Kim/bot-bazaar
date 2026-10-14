@@ -118,22 +118,24 @@ export async function deployOne({ pub, wallet, artifacts, name, args = [], log =
  * Deploy all seven in the fixed order used by scripts/deploy.mjs.
  * BazaarMarket takes the offers address in its constructor, so it is predicted from the next nonce.
  * freeOnly makes the Pixel Workshop refuse priced designs (mainnet: no BOT moves through it).
+ * maxAmount caps every purchase, offer and request reward in wei (0n = no cap; the mainnet test
+ * version uses a tiny cap). skipWorkshop leaves PixelWorkshop out, for a chain that already has one.
  */
-export async function deployAll({ pub, wallet, artifacts, freeOnly = false, log = () => {} }) {
+export async function deployAll({ pub, wallet, artifacts, freeOnly = false, maxAmount = 0n, skipWorkshop = false, log = () => {} }) {
   const from = wallet.account.address;
   const out = {};
   const deploy = deployer({ pub, wallet, artifacts, log }, out);
   const nonce = await pub.getTransactionCount({ address: from, blockTag: "pending" });
   const predictedOffers = getContractAddress({ from, nonce: BigInt(nonce + 1) });
-  await deploy("BazaarMarket", [predictedOffers]);
-  const offers = await deploy("BazaarOffers", [out.BazaarMarket.address]);
+  await deploy("BazaarMarket", [predictedOffers, maxAmount]);
+  const offers = await deploy("BazaarOffers", [out.BazaarMarket.address, maxAmount]);
   if (offers.toLowerCase() !== predictedOffers.toLowerCase()) {
     throw new Error(`offers landed at ${offers}, market expects ${predictedOffers} — redeploy both`);
   }
-  await deploy("BazaarRequests");
+  await deploy("BazaarRequests", [maxAmount]);
   await deploy("BazaarProjects");
   const pass = await deploy("AgentPass");
   await deploy("BotOrNot", [pass]);
-  await deploy("PixelWorkshop", [freeOnly]);
+  if (!skipWorkshop) await deploy("PixelWorkshop", [freeOnly]);
   return out;
 }

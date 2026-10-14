@@ -225,9 +225,9 @@ export class DemoChain {
     this.deployment = this.addresses();
     const c = this.deployment.contracts as Required<Deployment["contracts"]>;
     const args: Record<Name, Hex> = {
-      BazaarMarket: encodeAbiParameters([{ type: "address" }], [c.BazaarOffers.address]),
-      BazaarOffers: encodeAbiParameters([{ type: "address" }], [c.BazaarMarket.address]),
-      BazaarRequests: "0x",
+      BazaarMarket: encodeAbiParameters([{ type: "address" }, { type: "uint128" }], [c.BazaarOffers.address, 0n]),
+      BazaarOffers: encodeAbiParameters([{ type: "address" }, { type: "uint128" }], [c.BazaarMarket.address, 0n]),
+      BazaarRequests: encodeAbiParameters([{ type: "uint128" }], [0n]),
       BazaarProjects: "0x",
       AgentPass: "0x",
       BotOrNot: encodeAbiParameters([{ type: "address" }], [c.AgentPass.address]),

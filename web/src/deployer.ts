@@ -24,10 +24,10 @@ export async function deployFromBrowser(pub: PublicClient, wallet: WalletClient,
   };
   const nonce = await pub.getTransactionCount({ address: from, blockTag: "pending" });
   const predictedOffers = getContractAddress({ from, nonce: BigInt(nonce + 1) });
-  const market = await deploy("BazaarMarket", [predictedOffers]);
-  const offers = await deploy("BazaarOffers", [market]);
+  const market = await deploy("BazaarMarket", [predictedOffers, 0n]);
+  const offers = await deploy("BazaarOffers", [market, 0n]);
   if (offers.toLowerCase() !== predictedOffers.toLowerCase()) throw new Error(`offers landed at ${offers}, market expects ${predictedOffers}`);
-  await deploy("BazaarRequests");
+  await deploy("BazaarRequests", [0n]);
   await deploy("BazaarProjects");
   const pass = await deploy("AgentPass");
   await deploy("BotOrNot", [pass]);

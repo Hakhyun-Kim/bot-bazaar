@@ -6,6 +6,11 @@
      "internalType": "address",
      "name": "offers_",
      "type": "address"
+    },
+    {
+     "internalType": "uint128",
+     "name": "maxAmount_",
+     "type": "uint128"
     }
    ],
    "stateMutability": "nonpayable",
@@ -14,6 +19,22 @@
   {
    "inputs": [],
    "name": "NotListed",
+   "type": "error"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint256",
+     "name": "cap",
+     "type": "uint256"
+    },
+    {
+     "internalType": "uint256",
+     "name": "amount",
+     "type": "uint256"
+    }
+   ],
+   "name": "OverCap",
    "type": "error"
   },
   {
@@ -667,6 +688,19 @@
   },
   {
    "inputs": [],
+   "name": "maxAmount",
+   "outputs": [
+    {
+     "internalType": "uint128",
+     "name": "",
+     "type": "uint128"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
    "name": "offers",
    "outputs": [
     {
@@ -1195,6 +1229,11 @@
      "internalType": "address",
      "name": "market_",
      "type": "address"
+    },
+    {
+     "internalType": "uint128",
+     "name": "maxAmount_",
+     "type": "uint128"
     }
    ],
    "stateMutability": "nonpayable",
@@ -1352,6 +1391,19 @@
    "type": "function"
   },
   {
+   "inputs": [],
+   "name": "maxAmount",
+   "outputs": [
+    {
+     "internalType": "uint128",
+     "name": "",
+     "type": "uint128"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
    "inputs": [
     {
      "internalType": "uint256",
@@ -1488,6 +1540,17 @@
   }
  ],
  "BazaarRequests": [
+  {
+   "inputs": [
+    {
+     "internalType": "uint128",
+     "name": "maxAmount_",
+     "type": "uint128"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "constructor"
+  },
   {
    "anonymous": false,
    "inputs": [
@@ -1855,6 +1918,19 @@
    "name": "handBack",
    "outputs": [],
    "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "maxAmount",
+   "outputs": [
+    {
+     "internalType": "uint128",
+     "name": "",
+     "type": "uint128"
+    }
+   ],
+   "stateMutability": "view",
    "type": "function"
   },
   {

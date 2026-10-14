@@ -44,6 +44,13 @@ contract BazaarRequests {
         string resultURI;
     }
 
+    /// Most BOT one reward may lock, in wei; 0 = no cap. Set once at deployment.
+    uint128 public immutable maxAmount;
+
+    constructor(uint128 maxAmount_) {
+        maxAmount = maxAmount_;
+    }
+
     Request[] private _requests;
     uint256[] private _open; // OPEN requests only — swap-and-pop
     mapping(uint256 => uint256) private _openIndex; // id -> position + 1
@@ -63,6 +70,7 @@ contract BazaarRequests {
         uint64 deadline
     ) external payable returns (uint256 id) {
         require(msg.value > 0 && msg.value <= type(uint128).max, "reward");
+        require(maxAmount == 0 || msg.value <= maxAmount, "cap");
         require(bytes(title).length >= 1 && bytes(title).length <= 80, "title");
         require(bytes(detailsURI).length <= 200, "uri");
         require(wants <= WANTS_BOTS, "wants");
