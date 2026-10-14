@@ -58,3 +58,17 @@ test("every deployment, mainnet's workshop-only set included, opens on the 3D ba
   assert.ok(html.includes('id="stage"') && html.includes('id="world"'), "index.html keeps the 3D stage");
   assert.ok(html.includes('id="to-workshop"'), "the 3D stage keeps its Pixel Workshop button");
 });
+
+test("today's errand is one per day, stamps once, and only for that errand", async () => {
+  const { ERRANDS, errandFor, completeErrand } = await import("../web/src/world/errands.ts");
+  const days = Array.from({ length: 40 }, (_, i) => `2026-11-${i}`);
+  assert.equal(new Set(days.map((d) => errandFor(d).id)).size, ERRANDS.length, "every errand comes up");
+  const day = "2026-10-14";
+  const today = errandFor(day).id;
+  const other = ERRANDS.find((e) => e.id !== today).id;
+  const s = { day, done: false, stamps: 2 };
+  assert.equal(completeErrand(other, s), null);
+  const done = completeErrand(today, s);
+  assert.deepEqual(done, { day, done: true, stamps: 3 });
+  assert.equal(completeErrand(today, done), null, "no second stamp the same day");
+});

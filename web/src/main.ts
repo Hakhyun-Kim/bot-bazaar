@@ -20,6 +20,7 @@ import { browserDeploymentKey, deploymentFor, type Deployment } from "./deployme
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
 import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
+import { PRACTICE, nextPractice } from "./world/errands";
 import "./style.css";
 
 type Name = keyof Deployment["contracts"];
@@ -839,6 +840,7 @@ async function worldData(): Promise<WorldData> {
 
 function openPanel(t: Target) {
   panel = t;
+  if (t.kind === "tab" && t.tab === "workshop") world?.errand("draw");
   void renderPanel();
 }
 
@@ -858,6 +860,8 @@ async function renderPanel() {
       const who = await whoIs([s.owner]);
       body.innerHTML = `<div class="grid">${shopCard(s, who.get(s.owner))}</div>`;
       bindShopButtons(body);
+    } else if (workshopOnly() && panel.tab === "botornot") {
+      viewPractice(body);
     } else if (workshopOnly() && panel.tab !== "workshop") {
       body.innerHTML = `<h2>Coming soon</h2>
         <p>Shops, requests, escrow and Bot or Not are live on testnet and come to ${esc(chain().name)} next.
@@ -869,6 +873,37 @@ async function renderPanel() {
   } catch (e) {
     body.innerHTML = `<p class="error">Could not read the chain: ${esc((e as Error).message)}</p>`;
   }
+}
+
+/** Bot or Not without the contract: a resident on stage says one line, the visitor guesses. Nothing
+ *  goes on chain; the real game with on-chain votes stays on testnet until it comes to mainnet. */
+let practiceAt = -1;
+function viewPractice(body: HTMLElement) {
+  practiceAt = nextPractice(practiceAt);
+  const round = PRACTICE[practiceAt];
+  const best = Number(store.get("bazaar-practice-best")) || 0;
+  const streak = Number(store.get("bazaar-practice-streak")) || 0;
+  body.innerHTML = `<h2>🎭 Bot or Not <small>practice round</small></h2>
+    <p>A hooded trader steps on stage and says:</p>
+    <blockquote class="practice-line">“${esc(round.line)}”</blockquote>
+    <p>Bot or human?</p>
+    <p class="practice-pick"><button class="fun" data-guess="bot">🤖 Bot</button> <button class="fun" data-guess="human">🧑 Human</button></p>
+    <p id="practice-out" aria-live="polite"></p>
+    <p class="muted">Best streak ${best}. Practice only: nothing is written on chain. The real game, with votes on chain,
+      <a href="?network=testnet">runs on testnet</a> and comes to ${esc(chain().name)} later.</p>`;
+  body.querySelectorAll<HTMLButtonElement>("[data-guess]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const right = (b.dataset.guess === "bot") === round.bot;
+      const now = right ? streak + 1 : 0;
+      store.set("bazaar-practice-streak", String(now));
+      if (now > best) store.set("bazaar-practice-best", String(now));
+      body.querySelectorAll<HTMLButtonElement>("[data-guess]").forEach((x) => (x.disabled = true));
+      const out = body.querySelector("#practice-out")!;
+      out.innerHTML = `${right ? "✅ Right!" : "❌ Not quite."} The hood comes off: it was <b>${esc(round.who)}</b>, ${round.bot ? "a bot 🤖" : "a human 🧑"}.
+        Streak ${now}. <button class="fun" data-next>Next round</button>`;
+      out.querySelector("[data-next]")!.addEventListener("click", () => viewPractice(body));
+    }),
+  );
 }
 
 /** The 3D bazaar fills whatever the header and banner leave of the window. */
@@ -920,7 +955,7 @@ async function render() {
   banner.hidden = false;
   if (networkKey === "mainnet") {
     banner.textContent = workshopOnly()
-      ? "BOT Chain mainnet · the Pixel Workshop is open (gas only, in real BOT). Shops and Bot or Not are coming soon."
+      ? "BOT Chain mainnet · the Pixel Workshop and gallery are open (gas only, in real BOT). Shops and the parcel lockers are coming soon."
       : "BOT Chain mainnet: payments are real BOT.";
   } else if (demo) {
     banner.innerHTML = `Demo<span class="long">: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser.</span> · Clock ${new Date(

@@ -131,3 +131,21 @@ a.fun-link { display: inline-block; padding: 2px 10px; text-decoration: none; }
 .w-cta small { font-size: 12px; font-weight: 700; color: #6b5d70; }
 .w-cta:active { transform: translateY(2px); box-shadow: 0 2px 0 #3a2e3f; }
 .w-sign.easel { border-top-color: #ffd166; }
+
+/* residents, emotes, today's errand, gallery (no contract needed) */
+.w-name { color: #3a2e3f; background: #fffaf0; border: 2px solid #3a2e3f; border-radius: 10px; padding: 0 7px; font: 800 11px ui-rounded, system-ui, sans-serif; white-space: nowrap; }
+.w-say { position: relative; width: max-content; max-width: 220px; color: #3a2e3f; background: #fff; border: 2.5px solid #3a2e3f; border-radius: 14px;
+  padding: 5px 10px; font: 700 13px/1.3 ui-rounded, "Nunito", "Trebuchet MS", system-ui, sans-serif; box-shadow: 0 3px 0 #3a2e3f; text-align: center; transform: translateY(-14px); }
+.w-say::after { content: ""; position: absolute; left: 50%; bottom: -9px; margin-left: -7px; border: 7px solid transparent; border-top-color: #3a2e3f; border-bottom: 0; }
+.w-say.me { background: #ffd166; }
+.w-sign.gallery b { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+.w-emotes { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 20; display: flex; gap: 6px; }
+.w-emotes button { width: 40px; height: 40px; padding: 0; font-size: 20px; line-height: 1; background: #fffaf0; border: 2px solid #3a2e3f; border-radius: 999px; box-shadow: 0 3px 0 #3a2e3f; }
+.w-emotes button:active { transform: translateY(2px); box-shadow: 0 1px 0 #3a2e3f; }
+.w-errand { position: absolute; top: 84px; left: 12px; z-index: 24; display: flex; gap: 8px; align-items: center; max-width: min(320px, calc(100% - 24px));
+  color: #3a2e3f; background: #fffaf0; border: 2px dashed #3a2e3f; border-radius: 12px; padding: 4px 10px; font: 700 12px/1.3 ui-rounded, system-ui, sans-serif; }
+.w-errand.done { border-style: solid; background: #e4f8e0; }
+.w-errand b { white-space: nowrap; }
+.practice-line { margin: 8px 0; padding: 10px 14px; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; font-size: 17px; font-weight: 600; }
+.practice-pick button { font-size: 17px; padding: 6px 16px; }
+#practice-out button { margin-left: 6px; }

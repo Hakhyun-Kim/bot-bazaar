@@ -327,7 +327,10 @@ DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --only PixelWorkshop --ye
 ```
 
 The site opens on the 3D bazaar; the Pixel Workshop (draw, publish, gallery) opens as a panel over it from its button,
-the easel in the market or the next tab. On mainnet the rest of the market shows as coming soon.
+the easel in the market or the next tab. Some things in the market need no contract, so they work on every network:
+gallery frames hang the on-chain designs on empty stalls, residents walk about and chat, five emotes (residents close by
+join in), one small errand a day with a stamp kept in the browser, and a Bot or Not practice round on mainnet
+(`web/src/world/errands.ts`). On mainnet the shops and parcel lockers show as coming soon.
 The first mainnet version is the Pixel Workshop alone (free designs and the gallery). `deploy.mjs` refuses a mainnet deploy from any wallet that deployed a
 testnet set, because that key also lives in a browser and a GitHub secret.
 

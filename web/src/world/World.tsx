@@ -3,13 +3,15 @@
 // undeclared trader), parcels wait in the escrow lockers in the middle, and the request board,
 // Bot or Not puppet theatre, pixel easel and project gate stand on the paths. Walk with WASD /
 // arrows or tap the ground; click anything to trade. Everything shown is read from the chain by
-// main.ts and handed in as data.
+// main.ts and handed in as data. Gallery frames show the on-chain pixel designs; residents walk
+// about and chat, and emotes and a daily errand (after GIWA Village) need no contract at all.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html, Outlines } from "@react-three/drei";
 import { Color, DataTexture, Group, InstancedMesh, Mesh, MeshBasicMaterial, NearestFilter, Object3D, RedFormat, Vector3 } from "three";
 import { PRESET16, decodePixels } from "../pixel";
+import { completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
 
 export type Tab = "requests" | "botornot" | "workshop" | "projects" | "account";
 export type Target = { kind: "shop"; owner: string } | { kind: "tab"; tab: Tab };
@@ -38,6 +40,8 @@ export interface WorldData {
 export interface WorldApi {
   update(d: WorldData): void;
   pulse(): void;
+  /** Something outside the 3D scene (the Pixel Workshop button) counts toward today's errand. */
+  errand(id: ErrandId): void;
   destroy(): void;
 }
 
@@ -127,6 +131,126 @@ interface Spot {
   r: number;
   name: string;
   target: Target | null;
+  /** Done in the scene instead of opening a panel (talking to a resident). */
+  act?: () => void;
+}
+
+// ---------- residents, emotes and today's errand: no chain needed ----------
+export const EMOTES = [
+  { icon: "👋", name: "Wave" },
+  { icon: "🙇", name: "Bow" },
+  { icon: "👏", name: "Clap" },
+  { icon: "💃", name: "Dance" },
+  { icon: "🥤", name: "Cheers" },
+] as const;
+interface Resident {
+  id: string;
+  name: string;
+  kind: number;
+  address: string;
+  /** Where they walk: a ring around the lockers (r 0 stands still at home). */
+  home: [number, number];
+  ring: number;
+  speed: number;
+  lines: string[];
+}
+const RESIDENTS: Resident[] = [
+  {
+    id: "bolt", name: "Bolt", kind: 2, address: "0xb0170000000000000000000000000000000000b0", home: [2.2, 8.0], ring: 0, speed: 0,
+    lines: [
+      "Welcome to BOT Bazaar! Walk with WASD or the arrows, or tap the ground.",
+      "The easel on the west path is the Pixel Workshop. Publishing a design is free, you only pay gas.",
+      "Every frame in the gallery is a design someone put on BOT Chain. Yours could hang here too.",
+      "The shops and parcel lockers open here later. For now we draw, chat and wave!",
+      "Try an emote while I'm close. Two of us at once counts as together!",
+      "Check the request board up north for today's errand. It gives you a stamp.",
+    ],
+  },
+  {
+    id: "pip", name: "Pip", kind: 3, address: "0x9109000000000000000000000000000000000a11", home: [0, 0], ring: 6.0, speed: 0.07,
+    lines: [
+      "My drone carries my pencils. It drops them a lot.",
+      "Eight by eight sounds tiny, but you can fit a whole cat in there.",
+      "Have you seen the theatre on the east path? I always guess wrong.",
+      "I like the frames by the north path best. The light is nice there.",
+    ],
+  },
+  {
+    id: "mo", name: "Mo", kind: 0, address: "0x3030000000000000000000000000000000000303", home: [0, 0], ring: 6.6, speed: -0.05,
+    lines: [
+      "Am I a bot or a human? That is for the theatre to guess.",
+      "I keep my hood up. It is more fun that way.",
+      "Psst. Do a little dance. Everyone joins in if they are close.",
+      "I walked around this market a thousand times. Or maybe twice.",
+    ],
+  },
+  {
+    id: "juno", name: "Juno", kind: 1, address: "0x7070000000000000000000000000000000000909", home: [0, 0], ring: 5.4, speed: 0.045,
+    lines: [
+      "I'm saving up ideas for when the shops open.",
+      "Did you collect today's stamp yet? I've got a little stack of them.",
+      "A design on chain stays there. That's why I draw slowly.",
+      "Hello! Nice day for the market, isn't it?",
+    ],
+  },
+];
+/** Where each resident stands right now, written by their frame loop, read by the player's. */
+const residentAt = new Map<string, { x: number; z: number }>();
+/** Speech bubbles and emotes: who shows what, until when. "me" is the player. */
+const bubbles = new Map<string, { text: string; emote?: string; until: number }>();
+let errand: ErrandState = loadErrand();
+let chatVersion = 0;
+const chatEmit = () => (chatVersion++, emit());
+const useChat = () => useSyncExternalStore(subscribe, () => chatVersion);
+const lineIndex = new Map<string, number>();
+/** The bubble someone shows now; re-renders once more when it runs out. */
+function useBubble(id: string) {
+  useChat();
+  const [, tick] = useState(0);
+  const b = bubbles.get(id);
+  const live = b && b.until > performance.now() ? b : null;
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => tick((v) => v + 1), live.until - performance.now() + 30);
+    return () => clearTimeout(t);
+  }, [live]);
+  return live;
+}
+
+function finishErrand(id: ErrandId) {
+  if (errand.day !== loadErrand().day) errand = loadErrand(); // the page stayed open past midnight
+  const next = completeErrand(id, errand);
+  if (!next) return;
+  errand = next;
+  bubbles.set("me", { text: `📮 Errand done! Stamp #${next.stamps}`, until: performance.now() + 3200 });
+  chatEmit();
+}
+
+function talk(r: Resident) {
+  const i = lineIndex.get(r.id) ?? 0;
+  lineIndex.set(r.id, i + 1);
+  bubbles.set(r.id, { text: r.lines[i % r.lines.length], until: performance.now() + 5200 });
+  chatEmit();
+  finishErrand("talk");
+}
+
+/** The player emotes; residents close by join in a beat later (GIWA Village's "together"). */
+function doEmote(icon: string) {
+  const now = performance.now();
+  const p = { x: player.x, z: player.z };
+  const near = RESIDENTS.filter((r) => {
+    const at = residentAt.get(r.id);
+    return at && Math.hypot(at.x - p.x, at.z - p.z) < 6;
+  });
+  bubbles.set("me", { text: near.length ? `${icon} together ×${near.length + 1}` : icon, emote: icon, until: now + 2200 });
+  chatEmit();
+  if (!near.length) return;
+  setTimeout(() => {
+    const t = performance.now();
+    for (const r of near) bubbles.set(r.id, { text: `${icon} together!`, emote: icon, until: t + 2200 });
+    chatEmit();
+    finishErrand("together");
+  }, 450);
 }
 
 // ---------- figures (chibi: big heads, small bodies) ----------
@@ -367,6 +491,87 @@ function SoonStall({ slot, open }: { slot: (typeof SLOTS)[number]; open: (t: Tar
   );
 }
 
+/** A gallery stand: an on-chain design hung in a big frame where a shop would be. An empty frame
+ *  invites the visitor to draw the next one. */
+const FRAME = ["#ffd166", "#7cc6f2", "#ff8fa3", "#5ccf7a", "#b98cff", "#ff9f1c"];
+function GalleryStand({ slot, design, n, open }: { slot: (typeof SLOTS)[number]; design: Design | null; n: number; open: (t: Target) => void }) {
+  const color = FRAME[n % FRAME.length];
+  return (
+    <group position={[slot.x, 0, slot.z]} rotation={[0, slot.rot, 0]} {...clickable(() => open({ kind: "tab", tab: "workshop" }))}>
+      {[-1.35, 1.35].map((x) => (
+        <P key={x} color={WOOD_DARK} position={[x, 1.2, -0.7]}><cylinderGeometry args={[0.08, 0.09, 2.4, 10]} /></P>
+      ))}
+      <Awning color={color} />
+      <P color={WOOD} position={[0, 0.3, 0.7]}><boxGeometry args={[2.8, 0.6, 0.6]} /></P>
+      {[0, 1, 2].map((k) => (
+        <P key={k} color={GOODS[(n + k) % GOODS.length]} position={[-0.9 + k * 0.9, 0.7, 0.75]} line={0.015}><cylinderGeometry args={[0.16, 0.13, 0.22, 12]} /></P>
+      ))}
+      <P color={color} position={[0, 1.75, -0.6]}><boxGeometry args={[2.25, 2.25, 0.14]} /></P>
+      <P color={CREAM} position={[0, 1.75, -0.52]} line={0}><boxGeometry args={[2.0, 2.0, 0.04]} /></P>
+      <PixelArt design={design} cell={0.24} position={[0, 1.75, -0.47]} />
+      <Html position={[0, 3.25, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+        <div className={`w-sign gallery${design ? "" : " free"}`} style={{ borderTopColor: color }}>
+          <b>{design ? `🖼️ “${design.name}”` : "🖼️ Empty frame"}</b>
+          <span>{design ? "on BOT Chain · tap to draw yours" : "publish a design to hang here"}</span>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+/** A resident walking the market. Tap them (or press F close by) and they say something. */
+function ResidentFigure({ r, open }: { r: Resident; open: () => void }) {
+  const bubble = useBubble(r.id);
+  const g = useRef<Group>(null);
+  const body = useRef<Group>(null);
+  const t = useRef(Math.random() * 100);
+  const angle = useRef((RESIDENTS.indexOf(r) / RESIDENTS.length) * Math.PI * 2 + 0.6);
+  useFrame((_, raw) => {
+    const dt = Math.min(raw, 0.1);
+    t.current += dt;
+    if (!g.current) return;
+    const b = bubbles.get(r.id);
+    const busy = !!b && b.until > performance.now();
+    const close = Math.hypot(g.current.position.x - player.x, g.current.position.z - player.z) < 2.6;
+    let x = r.home[0];
+    let z = r.home[1];
+    if (r.ring) {
+      // stroll, with a pause every so often; stop to chat when the player is close
+      const stroll = Math.sin(t.current * 0.35) > -0.4;
+      if (stroll && !busy && !close) angle.current += r.speed * dt * 3;
+      x = Math.sin(angle.current) * r.ring;
+      z = -Math.cos(angle.current) * r.ring;
+    }
+    const moving = Math.hypot(x - g.current.position.x, z - g.current.position.z) > 0.0005;
+    if (moving) g.current.rotation.y = Math.atan2(x - g.current.position.x, z - g.current.position.z);
+    else if (close) g.current.rotation.y = Math.atan2(player.x - x, player.z - z);
+    g.current.position.set(x, 0, z);
+    residentAt.set(r.id, { x, z });
+    if (body.current) emoteMotion(body.current, b, t.current);
+  });
+  return (
+    <group ref={g} {...clickable(open)}>
+      <group ref={body}>
+        <Trader kind={r.kind} address={r.address} />
+      </group>
+      <Html position={[0, 2.25, 0]} center distanceFactor={12} zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
+        {bubble ? <div className="w-say">{bubble.text}</div> : <div className="w-name">{r.name}</div>}
+      </Html>
+    </group>
+  );
+}
+
+/** Small body motions for emotes: a hop, a bow, a spin. */
+function emoteMotion(o: Group, b: { emote?: string; until: number } | undefined, t: number) {
+  const on = !!b?.emote && b.until > performance.now();
+  o.rotation.set(0, 0, 0);
+  o.position.y = 0;
+  if (!on) return;
+  if (b!.emote === "🙇") o.rotation.x = 0.45;
+  else if (b!.emote === "💃") (o.rotation.y = t * 9), (o.position.y = Math.abs(Math.sin(t * 9)) * 0.15);
+  else o.position.y = Math.abs(Math.sin(t * 10)) * 0.25;
+}
+
 /** Escrow as a parcel locker: paid goods wait in a box until the buyer says OK. */
 function EscrowLockers() {
   const d = useData();
@@ -458,10 +663,24 @@ function RequestBoard({ open }: { open: (t: Target) => void }) {
               <span>{["Anyone", "Humans", "Bots"][r.wants]}</span> {r.title} <b>{r.reward}</b>
             </p>
           ))}
-          {!d.requests.length && <p>{d.soon ? "Requests open here soon." : "No open requests. Post the first!"}</p>}
+          {!d.requests.length && !d.soon && <p>No open requests. Post the first!</p>}
+          {d.soon && <ErrandNotes />}
         </div>
       </Html>
     </group>
+  );
+}
+
+/** On a network without BazaarRequests the board pins today's errand instead. */
+function ErrandNotes() {
+  useChat();
+  const e = errandFor(errand.day);
+  return (
+    <>
+      <p style={{ transform: "rotate(-1deg)" }}><span style={{ background: "#ef476f" }}>Today</span> {e.text} <b>{errand.done ? "✅" : "📮"}</b></p>
+      <p style={{ transform: "rotate(1deg)" }}><span style={{ background: "#5ccf7a" }}>Stamps</span> collected in this browser <b>{errand.stamps}</b></p>
+      <p style={{ transform: "rotate(-2deg)" }}><span>Soon</span> Requests with BOT rewards</p>
+    </>
   );
 }
 
@@ -486,7 +705,7 @@ function BotOrNotStage({ open }: { open: (t: Target) => void }) {
       ))}
       <P color="#ef476f" position={[0, 3.25, -0.6]}><boxGeometry args={[4.2, 0.6, 1.2]} /></P>
       <P color="#6c4f9c" position={[0, 2.0, -1.1]} line={0.02}><boxGeometry args={[3.5, 2.2, 0.1]} /></P>
-      <group position={[0, 0.95, -0.2]}>{live ? <Hooded /> : null}</group>
+      <group position={[0, 0.95, -0.2]}>{live || d.soon ? <Hooded /> : null}</group>
       <group ref={q} position={[0, 4.3, -0.6]}>
         <P color="#ffd166" position={[0, 0.2, 0]} rotation={[0, 0, -0.6]}><torusGeometry args={[0.28, 0.1, 10, 20, Math.PI * 1.4]} /></P>
         <P color="#ffd166" position={[0, -0.45, 0]}><sphereGeometry args={[0.1, 10, 10]} /></P>
@@ -495,7 +714,7 @@ function BotOrNotStage({ open }: { open: (t: Target) => void }) {
         <div className="w-sign stage">
           <b>🎭 Bot or Not</b>
           <span>
-            {live ? `${short(live.trader)} · 🤖 ${live.bot} · 🧑 ${live.human}` : d.soon ? "coming soon" : "Stage is free. Enter a round!"}
+            {live ? `${short(live.trader)} · 🤖 ${live.bot} · 🧑 ${live.human}` : d.soon ? "practice round · bot or human?" : "Stage is free. Enter a round!"}
             {d.rounds.length > 1 ? ` · +${d.rounds.length - 1} more` : ""}
           </span>
         </div>
@@ -504,18 +723,10 @@ function BotOrNotStage({ open }: { open: (t: Target) => void }) {
   );
 }
 
-/** A painter's easel showing the on-chain designs one after another. */
-function PixelEasel({ open }: { open: (t: Target) => void }) {
-  const d = useData();
-  const { x, z } = LANDMARK.wall;
+type Design = WorldData["designs"][number];
+/** An 8×8 on-chain design as 64 little tiles (a blank canvas when there is none). */
+function PixelArt({ design, cell, position }: { design: Design | null; cell: number; position: V3 }) {
   const mesh = useRef<InstancedMesh>(null);
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (d.designs.length < 2) return;
-    const id = setInterval(() => setI((v) => v + 1), 3500);
-    return () => clearInterval(id);
-  }, [d.designs.length]);
-  const design = d.designs.length ? d.designs[i % d.designs.length] : null;
   useEffect(() => {
     const m = mesh.current;
     if (!m) return;
@@ -523,7 +734,7 @@ function PixelEasel({ open }: { open: (t: Target) => void }) {
     const c = new Color();
     const cells = design ? decodePixels(design.pixels) : new Array<number>(64).fill(0);
     cells.forEach((v, k) => {
-      o.position.set(((k % 8) - 3.5) * 0.34, (3.5 - Math.floor(k / 8)) * 0.34, 0);
+      o.position.set(((k % 8) - 3.5) * cell, (3.5 - Math.floor(k / 8)) * cell, 0);
       o.updateMatrix();
       m.setMatrixAt(k, o.matrix);
       const hex = design ? PRESET16[(design.palette >> (12 - 4 * v)) & 15] : "#00000000";
@@ -532,7 +743,26 @@ function PixelEasel({ open }: { open: (t: Target) => void }) {
     });
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [design]);
+  }, [design, cell]);
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, 64]} position={position}>
+      <boxGeometry args={[cell - 0.01, cell - 0.01, 0.04]} />
+      <meshBasicMaterial toneMapped={false} />
+    </instancedMesh>
+  );
+}
+
+/** A painter's easel showing the on-chain designs one after another. */
+function PixelEasel({ open }: { open: (t: Target) => void }) {
+  const d = useData();
+  const { x, z } = LANDMARK.wall;
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (d.designs.length < 2) return;
+    const id = setInterval(() => setI((v) => v + 1), 3500);
+    return () => clearInterval(id);
+  }, [d.designs.length]);
+  const design = d.designs.length ? d.designs[i % d.designs.length] : null;
   return (
     <group position={[x, 0, z]} rotation={[0, Math.PI / 2, 0]} {...clickable(() => open({ kind: "tab", tab: "workshop" }))}>
       {[-0.9, 0.9].map((px) => (
@@ -541,10 +771,7 @@ function PixelEasel({ open }: { open: (t: Target) => void }) {
       <P color={WOOD_DARK} position={[0, 1.5, -0.7]} rotation={[0.35, 0, 0]}><cylinderGeometry args={[0.06, 0.07, 3.2, 8]} /></P>
       <P color={WOOD} position={[0, 1.0, 0.1]}><boxGeometry args={[2.4, 0.14, 0.3]} /></P>
       <P color={CREAM} position={[0, 2.45, 0]}><boxGeometry args={[3.0, 3.0, 0.12]} /></P>
-      <instancedMesh ref={mesh} args={[undefined, undefined, 64]} position={[0, 2.45, 0.08]}>
-        <boxGeometry args={[0.33, 0.33, 0.04]} />
-        <meshBasicMaterial toneMapped={false} />
-      </instancedMesh>
+      <PixelArt design={design} cell={0.34} position={[0, 2.45, 0.08]} />
       <group position={[1.5, 0.2, 0.9]}>
         <P color="#f2f2f2"><cylinderGeometry args={[0.4, 0.4, 0.06, 18]} /></P>
         {GOODS.slice(0, 4).map((c, k) => (
@@ -707,6 +934,12 @@ function Ground() {
 }
 
 // ---------- the player ----------
+const residentSpots = (): Spot[] =>
+  RESIDENTS.flatMap((r) => {
+    const at = residentAt.get(r.id);
+    return at ? [{ x: at.x, z: at.z, r: 0.5, name: `Talk to ${r.name}`, target: null, act: () => talk(r) }] : [];
+  });
+
 function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | null) => void; open: (t: Target) => void }) {
   const d = useData();
   const g = useRef<Group>(null);
@@ -714,6 +947,8 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
   const camera = useThree((s) => s.camera);
   const look = useRef(new Vector3(0, 1, 0));
   const nearRef = useRef<Spot | null>(null);
+  const body = useRef<Group>(null);
+  const bubble = useBubble("me");
   const narrow = useThree((s) => s.size.width < 640);
 
   useEffect(() => {
@@ -728,8 +963,8 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
         player.target = null;
         e.preventDefault();
       }
-      const t = nearRef.current?.target;
-      if ((e.code === "KeyF" || e.code === "Enter") && t) open(t);
+      const s = nearRef.current;
+      if ((e.code === "KeyF" || e.code === "Enter") && s) s.act ? s.act() : s.target && open(s.target);
     };
     const up = (e: KeyboardEvent) => keys.current.delete(e.code);
     const blur = () => keys.current.clear();
@@ -784,11 +1019,13 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
 
     let best: Spot | null = null;
     let bestD = Infinity;
-    for (const s of spots) {
-      if (!s.target) continue;
+    for (const s of [...spots, ...residentSpots()]) {
+      if (!s.target && !s.act) continue;
       const dd = Math.hypot(s.x - player.x, s.z - player.z) - s.r;
       if (dd < 2.2 && dd < bestD) (best = s), (bestD = dd);
     }
+    if (best && best.name.endsWith("(gallery)")) finishErrand("gallery");
+    if (body.current) emoteMotion(body.current, bubbles.get("me"), performance.now() / 1000);
     if (best?.name !== nearRef.current?.name) {
       nearRef.current = best;
       setNear(best);
@@ -801,9 +1038,11 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
         <circleGeometry args={[0.55, 32]} />
         <meshBasicMaterial color={INK} transparent opacity={0.18} />
       </mesh>
-      <Trader kind={d.myKind} address={d.me ?? "0x0"} you />
+      <group ref={body}>
+        <Trader kind={d.myKind} address={d.me ?? "0x0"} you />
+      </group>
       <Html position={[0, 2.2, 0]} center distanceFactor={12} zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-        <div className="w-me">You</div>
+        {bubble ? <div className="w-say me">{bubble.text}</div> : <div className="w-me">You</div>}
       </Html>
     </group>
   );
@@ -814,10 +1053,17 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
   const d = useData();
   const placed = d.shops.slice(0, SLOTS.length).map((shop, i) => ({ shop, slot: SLOTS[i] }));
   const free = !d.soon && !d.myShop && d.me && placed.length < SLOTS.length ? SLOTS[placed.length] : null;
-  const shut = d.soon ? SLOTS.slice(placed.length, placed.length + 6) : [];
+  // Slots no shop uses hang the on-chain designs (empty frames invite a drawing). Where shops are not
+  // open yet, two shuttered stalls stay as "coming soon".
+  const used = placed.length + (free ? 1 : 0);
+  const gallery = SLOTS.slice(used, used + (d.soon ? 6 : Math.min(4, d.designs.length))).map((slot, i) => ({ slot, design: d.designs[i] ?? null }));
+  const shut = d.soon ? SLOTS.slice(used + gallery.length, used + gallery.length + 2) : [];
   const spots = useMemo<Spot[]>(() => {
     const out: Spot[] = placed.map(({ shop, slot }) => ({ x: slot.x, z: slot.z, r: 1.7, name: shop.title, target: { kind: "shop", owner: shop.owner } }));
     if (free) out.push({ x: free.x, z: free.z, r: 1.7, name: "Free stall: open your shop", target: { kind: "tab", tab: "account" } });
+    for (const { slot, design } of gallery)
+      out.push({ x: slot.x, z: slot.z, r: 1.7, name: design ? `“${design.name}” (gallery)` : "Empty frame: draw one", target: { kind: "tab", tab: "workshop" } });
+    for (const slot of shut) out.push({ x: slot.x, z: slot.z, r: 1.7, name: "Shop (coming soon)", target: { kind: "tab", tab: "account" } });
     out.push(
       { ...LANDMARK.core, name: "Escrow lockers: your orders", target: { kind: "tab", tab: "account" } },
       { ...LANDMARK.board, name: "Request board", target: { kind: "tab", tab: "requests" } },
@@ -851,7 +1097,9 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
       <ProjectGate open={open} />
       {placed.map(({ shop, slot }) => <Stall key={shop.owner} shop={shop} slot={slot} open={open} />)}
       {free && <EmptyStall slot={free} open={open} />}
+      {gallery.map(({ slot, design }, i) => <GalleryStand key={`g${i}`} slot={slot} design={design} n={i} open={open} />)}
       {shut.map((slot, i) => <SoonStall key={i} slot={slot} open={open} />)}
+      {RESIDENTS.map((r) => <ResidentFigure key={r.id} r={r} open={() => talk(r)} />)}
       <Player spots={spots} setNear={setNear} open={open} />
     </>
   );
@@ -866,19 +1114,37 @@ function Root({ open }: { open: (t: Target) => void }) {
       <Canvas camera={{ position: [0, 7, 18.5], fov: 50 }} dpr={[1, 1.75]}>
         <Scene open={open} setNear={setNear} />
       </Canvas>
+      <ErrandChip />
+      <div className="w-emotes" role="toolbar" aria-label="Emotes">
+        {EMOTES.map((e) => (
+          <button key={e.icon} type="button" title={e.name} aria-label={e.name} onClick={() => doEmote(e.icon)}>{e.icon}</button>
+        ))}
+      </div>
       <div className="w-hud">
-        {near?.target ? (
-          <button className="w-open" onClick={() => open(near.target!)}>
-            Open {near.name} <kbd>F</kbd>
+        {near?.act || near?.target ? (
+          <button className="w-open" onClick={() => (near.act ? near.act() : open(near.target!))}>
+            {near.act ? near.name : `Open ${near.name}`} <kbd>F</kbd>
           </button>
         ) : (
           <span>
             {touch ? "Tap the ground to walk" : "WASD / arrows or click the ground to walk"}
-            {d.soon ? " · tap the 🎨 easel to draw pixel art" : touch ? ", tap a stall to trade" : " · click a stall to trade"}
+            {d.soon ? " · tap a resident to chat" : touch ? ", tap a stall to trade" : " · click a stall to trade"}
           </span>
         )}
       </div>
     </>
+  );
+}
+
+/** Today's errand, under the Pixel Workshop button. */
+function ErrandChip() {
+  useChat();
+  const e = errandFor(errand.day);
+  return (
+    <div className={`w-errand${errand.done ? " done" : ""}`} title="One small errand a day. Stamps stay in this browser.">
+      <span>{errand.done ? "✅" : "📮"} Today: {e.text}</span>
+      <b>🏅 {errand.stamps}</b>
+    </div>
   );
 }
 
@@ -893,6 +1159,9 @@ export function mountWorld(el: HTMLElement, open: (t: Target) => void): WorldApi
     pulse() {
       pulses++;
       emit();
+    },
+    errand(id) {
+      finishErrand(id);
     },
     destroy() {
       root.unmount();
