@@ -108,6 +108,18 @@ function c(name: Name) {
 }
 /** A network with only the Pixel Workshop (the first mainnet version) shows the 3D market with the rest marked coming soon. */
 const workshopOnly = () => !!dep && !dep.contracts.BazaarMarket;
+/** Per-transaction BOT cap of the mainnet test version (0.1), from deployments/<id>.json; 0n = none. */
+const cap = () => (dep?.maxAmount ? BigInt(dep.maxAmount) : 0n);
+const capNote = () => (cap() ? ` (max ${formatEther(cap())} while testing)` : "");
+/** Refuse amounts over the cap before the wallet is asked, with a plain message. */
+function capped(v: bigint) {
+  if (cap() && v > cap()) {
+    const msg = `The market is under construction: at most ${formatEther(cap())} BOT per transaction while we test.`;
+    toast(msg, true);
+    throw new Error(msg);
+  }
+  return v;
+}
 const tabsHere = (): readonly Tab[] => (dep ? tabsFor(dep.contracts) : TABS);
 function read<T>(name: Name, functionName: string, args: unknown[] = []): Promise<T> {
   return pub.readContract({ ...c(name), functionName, args } as never) as Promise<T>;
@@ -611,8 +623,8 @@ function bindShopButtons(el: HTMLElement) {
   el.querySelectorAll<HTMLButtonElement>("[data-offer]").forEach((b) =>
     b.addEventListener("click", () => {
       const [owner, item] = b.dataset.offer!.split("|");
-      const amount = prompt(`Your offer for "${item}" in BOT (held in escrow until accepted or cancelled)`);
-      if (amount) void busy(b, queueTx("Offer", "BazaarOffers", "makeOffer", [owner, item], parseEther(amount)));
+      const amount = prompt(`Your offer for "${item}" in BOT${capNote()} (held in escrow until accepted or cancelled)`);
+      if (amount) void busy(b, (async () => queueTx("Offer", "BazaarOffers", "makeOffer", [owner, item], capped(parseEther(amount))))());
     }),
   );
 }
@@ -789,7 +801,7 @@ async function viewAccount(el: HTMLElement) {
       <input name="uri" placeholder="https://… or ipfs://… metadata (optional)" maxlength="200" value="${esc(shop.metadataURI)}" />
       <label>Category <select name="cat">${CATEGORIES.map((n, i) => `<option value="${i}"${i === shop.category ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <label>Project id <input name="project" type="number" min="0" value="${shop.projectId}" /></label>
-      <textarea name="items" rows="4" placeholder="One item per line: name, price in BOT">${shop.items.map((it) => `${esc(it.name)}, ${formatEther(it.price)}`).join("\n")}</textarea>
+      <textarea name="items" rows="4" placeholder="One item per line: name, price in BOT${capNote()}">${shop.items.map((it) => `${esc(it.name)}, ${formatEther(it.price)}`).join("\n")}</textarea>
       <div><button>${shop.open ? "Update" : "Open"} shop</button>${shop.open ? ` <button type="button" class="ghost" id="close-shop">Close shop</button>` : ""}</div>
     </form>`;
   el.querySelector("#acct-faucet")?.addEventListener("click", () => void getTestBot());
@@ -816,7 +828,7 @@ async function viewAccount(el: HTMLElement) {
       .filter(Boolean)
       .map((l) => {
         const i = l.lastIndexOf(",");
-        return { name: l.slice(0, i).trim(), price: parseEther(l.slice(i + 1).trim()) };
+        return { name: l.slice(0, i).trim(), price: capped(parseEther(l.slice(i + 1).trim())) };
       });
     void busy((e as SubmitEvent).submitter, queueTx("Open shop", "BazaarMarket", "openShop", [
       f.get("title"), f.get("uri") || "", Number(f.get("project") || 0), Number(f.get("cat")), items,
@@ -871,7 +883,7 @@ async function viewRequests(el: HTMLElement) {
       <input name="uri" maxlength="200" placeholder="https://… details (optional)" />
       <select name="wants">${WANTS.map((w, i) => `<option value="${i}">${w} welcome</option>`).join("")}</select>
       <input name="days" type="number" min="1" value="7" title="Days to deliver" />
-      <input name="reward" placeholder="Reward in BOT" required />
+      <input name="reward" placeholder="Reward in BOT${capNote()}" required />
       <button>Post with escrow</button></form>
     ${me ? `<h3>Yours</h3><table>${mine
       .map(({ id, r }) => {
@@ -892,7 +904,7 @@ async function viewRequests(el: HTMLElement) {
     const f = new FormData(e.target as HTMLFormElement);
     const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(f.get("days")) * 86400);
     void busy((e as SubmitEvent).submitter, queueTx("Post request", "BazaarRequests", "post", [f.get("title"), f.get("uri") || "", Number(f.get("wants")), deadline],
-      parseEther(String(f.get("reward"))))).then(render);
+      capped(parseEther(String(f.get("reward")))))).then(render);
   });
   el.querySelectorAll<HTMLButtonElement>("[data-pitch]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -1230,7 +1242,9 @@ async function render() {
   if (networkKey === "mainnet") {
     banner.textContent = workshopOnly()
       ? "BOT Chain mainnet · the Pixel Workshop and gallery are open (gas only, in real BOT). Shops and the parcel lockers are coming soon."
-      : "BOT Chain mainnet: payments are real BOT.";
+      : cap()
+        ? `🚧 Under construction · BOT Chain mainnet test version 0.1: shops, offers and requests take at most ${formatEther(cap())} BOT each while we test. Payments are real BOT.`
+        : "BOT Chain mainnet: payments are real BOT.";
   } else if (demo) {
     banner.innerHTML = `Demo<span class="long">: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser.</span> · Clock ${new Date(
       demo.now() * 1000).toLocaleString()} <button id="skip">⏩ +1 day</button> <button class="ghost" id="reset">Reset</button>`;

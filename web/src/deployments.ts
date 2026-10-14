@@ -3,6 +3,8 @@ type Address = `0x${string}`;
 /** The first mainnet version is the Pixel Workshop alone, so a deployment may hold only some contracts. */
 export interface Deployment {
   chainId: number;
+  /** Mainnet test version: most BOT (wei, decimal string) one purchase, offer or request may carry. */
+  maxAmount?: string;
   contracts: Partial<Record<"BazaarMarket" | "BazaarOffers" | "BazaarRequests" | "BazaarProjects" | "AgentPass" | "BotOrNot" | "PixelWorkshop", { address: Address }>>;
 }
 

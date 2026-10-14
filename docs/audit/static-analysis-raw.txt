@@ -1,0 +1,208 @@
+'<scratch>/bin/solc --version' running
+'<scratch>/bin/solc --standard-json --allow-paths /home/claude/bot-bazaar' running
+INFO:Detectors:
+Detector: uninitialized-state
+BazaarProjects._featuredList (contracts/BazaarProjects.sol#20) is never initialized. It is used in:
+	- BazaarProjects.setFeatured(uint256,address,bool) (contracts/BazaarProjects.sol#51-68)
+	- BazaarProjects.featuredOf(uint256) (contracts/BazaarProjects.sol#96-98)
+BotOrNot._rounds (contracts/BotOrNot.sol#47) is never initialized. It is used in:
+	- BotOrNot.enter(bytes32) (contracts/BotOrNot.sol#68-76)
+	- BotOrNot.guess(address,bool) (contracts/BotOrNot.sol#78-93)
+	- BotOrNot.reveal(bool,bytes32) (contracts/BotOrNot.sol#95-111)
+	- BotOrNot.forfeit(address) (contracts/BotOrNot.sol#114-123)
+	- BotOrNot.claim(address,uint256) (contracts/BotOrNot.sol#126-135)
+	- BotOrNot.roundCount(address) (contracts/BotOrNot.sol#137-139)
+	- BotOrNot.roundOf(address,uint256) (contracts/BotOrNot.sol#141-143)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#uninitialized-state-variables
+INFO:Detectors:
+Detector: missing-zero-check
+BazaarMarket.constructor(address,uint128).offers_ (contracts/BazaarMarket.sol#122) lacks a zero-check on :
+		- offers = offers_ (contracts/BazaarMarket.sol#123)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+INFO:Detectors:
+Detector: calls-loop
+BazaarMarket._settle(uint256,BazaarMarket.Purchase) (contracts/BazaarMarket.sol#449-458) has external calls inside a loop: (ok,None) = p.seller.call{value: p.amount}() (contracts/BazaarMarket.sol#454)
+	Calls stack containing the loop:
+		BazaarMarket.releaseMany(uint256[])
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+INFO:Detectors:
+Detector: reentrancy-events
+Reentrancy in BazaarRequests._pay(uint256,BazaarRequests.Request) (contracts/BazaarRequests.sol#193-198):
+	External calls:
+	- (ok,None) = r.worker.call{value: r.reward}() (contracts/BazaarRequests.sol#195)
+	Event emitted after the call(s):
+	- Paid(id,r.worker,r.reward) (contracts/BazaarRequests.sol#197)
+Reentrancy in BazaarRequests._return(uint256,BazaarRequests.Request) (contracts/BazaarRequests.sol#200-205):
+	External calls:
+	- (ok,None) = r.poster.call{value: r.reward}() (contracts/BazaarRequests.sol#202)
+	Event emitted after the call(s):
+	- Returned(id,r.poster,r.reward) (contracts/BazaarRequests.sol#204)
+Reentrancy in BazaarMarket._settle(uint256,BazaarMarket.Purchase) (contracts/BazaarMarket.sol#449-458):
+	External calls:
+	- (ok,None) = p.seller.call{value: p.amount}() (contracts/BazaarMarket.sol#454)
+	Event emitted after the call(s):
+	- Settled(id,p.seller,p.amount) (contracts/BazaarMarket.sol#456)
+Reentrancy in BazaarOffers.acceptOffer(uint256) (contracts/BazaarOffers.sol#81-88):
+	External calls:
+	- purchaseId = market.purchaseFor{value: o.amount}(o.buyer,o.seller,o.itemName) (contracts/BazaarOffers.sol#86)
+	Event emitted after the call(s):
+	- OfferAccepted(id,purchaseId) (contracts/BazaarOffers.sol#87)
+Reentrancy in BazaarOffers.cancelOffer(uint256) (contracts/BazaarOffers.sol#70-78):
+	External calls:
+	- (ok,None) = address(o.buyer).call{value: o.amount}() (contracts/BazaarOffers.sol#75)
+	Event emitted after the call(s):
+	- OfferCancelled(id) (contracts/BazaarOffers.sol#77)
+Reentrancy in PixelWorkshop.collect(uint256) (contracts/PixelWorkshop.sol#56-67):
+	External calls:
+	- (ok,None) = d.creator.call{value: msg.value}() (contracts/PixelWorkshop.sol#63)
+	Event emitted after the call(s):
+	- DesignCollected(id,msg.sender,d.creator,msg.value) (contracts/PixelWorkshop.sol#66)
+Reentrancy in BazaarMarket.refund(uint256) (contracts/BazaarMarket.sol#439-447):
+	External calls:
+	- (ok,None) = address(p.buyer).call{value: p.amount}() (contracts/BazaarMarket.sol#444)
+	Event emitted after the call(s):
+	- Refunded(purchaseId,p.buyer,p.amount) (contracts/BazaarMarket.sol#446)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
+INFO:Detectors:
+Detector: timestamp
+AgentPass.link(address,uint256,uint8,bytes32,bytes32) (contracts/AgentPass.sol#71-83) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(block.timestamp <= deadline,expired) (contracts/AgentPass.sol#73)
+BazaarMarket.closeShop() (contracts/BazaarMarket.sol#286-292) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(s.open,closed) (contracts/BazaarMarket.sol#288)
+BazaarMarket.buyItem(address,uint8) (contracts/BazaarMarket.sol#390-400) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(s.open && index < s.items.length,item) (contracts/BazaarMarket.sol#395)
+BazaarMarket.confirm(uint256) (contracts/BazaarMarket.sol#403-407) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == p.buyer,buyer) (contracts/BazaarMarket.sol#405)
+BazaarMarket.release(uint256) (contracts/BazaarMarket.sol#410-414) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(block.timestamp >= p.releaseAt,early) (contracts/BazaarMarket.sol#412)
+BazaarMarket.releaseMany(uint256[]) (contracts/BazaarMarket.sol#417-424) uses timestamp for comparisons
+	Dangerous comparisons:
+	- p.settled || block.timestamp < p.releaseAt (contracts/BazaarMarket.sol#420)
+BazaarMarket.dispute(uint256) (contracts/BazaarMarket.sol#428-436) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == p.buyer,buyer) (contracts/BazaarMarket.sol#430)
+	- require(bool,string)(! p.settled && ! p.disputed,state) (contracts/BazaarMarket.sol#431)
+	- extended > p.releaseAt (contracts/BazaarMarket.sol#434)
+BazaarMarket.refund(uint256) (contracts/BazaarMarket.sol#439-447) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == p.seller,seller) (contracts/BazaarMarket.sol#441)
+	- require(bool,string)(! p.settled,settled) (contracts/BazaarMarket.sol#442)
+BazaarMarket._settle(uint256,BazaarMarket.Purchase) (contracts/BazaarMarket.sol#449-458) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(! p.settled,settled) (contracts/BazaarMarket.sol#450)
+BazaarOffers.cancelOffer(uint256) (contracts/BazaarOffers.sol#70-78) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(o.active,inactive) (contracts/BazaarOffers.sol#72)
+	- require(bool,string)(msg.sender == o.buyer || block.timestamp > o.expiresAt,buyer) (contracts/BazaarOffers.sol#73)
+BazaarOffers.acceptOffer(uint256) (contracts/BazaarOffers.sol#81-88) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(o.active && msg.sender == o.seller,seller) (contracts/BazaarOffers.sol#83)
+	- require(bool,string)(block.timestamp <= o.expiresAt,expired) (contracts/BazaarOffers.sol#84)
+BazaarProjects.projectOf(uint256) (contracts/BazaarProjects.sol#74-77) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(id >= 1 && id <= _projects.length,id) (contracts/BazaarProjects.sol#75)
+BazaarProjects.projectsPage(uint256,uint256) (contracts/BazaarProjects.sol#80-94) uses timestamp for comparisons
+	Dangerous comparisons:
+	- i < count (contracts/BazaarProjects.sol#90)
+	- n > offset (contracts/BazaarProjects.sol#86)
+	- from > limit (contracts/BazaarProjects.sol#87)
+BazaarProjects._own(uint256) (contracts/BazaarProjects.sol#100-104) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(id >= 1 && id <= _projects.length,id) (contracts/BazaarProjects.sol#101)
+	- require(bool,string)(p.owner == msg.sender,owner) (contracts/BazaarProjects.sol#103)
+BazaarRequests.post(string,string,uint8,uint64) (contracts/BazaarRequests.sol#66-85) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(deadline > block.timestamp,deadline) (contracts/BazaarRequests.sol#77)
+BazaarRequests.pitch(uint256,string) (contracts/BazaarRequests.sol#88-94) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(r.state == OPEN,state) (contracts/BazaarRequests.sol#90)
+	- require(bool,string)(msg.sender != r.poster,self) (contracts/BazaarRequests.sol#91)
+BazaarRequests.assign(uint256,address) (contracts/BazaarRequests.sol#96-106) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == r.poster,poster) (contracts/BazaarRequests.sol#98)
+	- require(bool,string)(r.state == OPEN,state) (contracts/BazaarRequests.sol#99)
+	- require(bool,string)(worker != address(0) && worker != r.poster,worker) (contracts/BazaarRequests.sol#100)
+	- require(bool,string)(block.timestamp < r.deadline,deadline) (contracts/BazaarRequests.sol#101)
+BazaarRequests.cancel(uint256) (contracts/BazaarRequests.sol#108-114) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == r.poster,poster) (contracts/BazaarRequests.sol#110)
+	- require(bool,string)(r.state == OPEN,state) (contracts/BazaarRequests.sol#111)
+BazaarRequests.submit(uint256,string) (contracts/BazaarRequests.sol#116-126) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == r.worker,worker) (contracts/BazaarRequests.sol#118)
+	- require(bool,string)(r.state == ASSIGNED,state) (contracts/BazaarRequests.sol#119)
+	- require(bool,string)(block.timestamp <= r.deadline,late) (contracts/BazaarRequests.sol#120)
+BazaarRequests.reclaim(uint256) (contracts/BazaarRequests.sol#129-134) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == r.poster,poster) (contracts/BazaarRequests.sol#131)
+	- require(bool,string)(r.state == ASSIGNED && block.timestamp > r.deadline,state) (contracts/BazaarRequests.sol#132)
+BazaarRequests.accept(uint256) (contracts/BazaarRequests.sol#136-141) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == r.poster,poster) (contracts/BazaarRequests.sol#138)
+	- require(bool,string)(r.state == SUBMITTED,state) (contracts/BazaarRequests.sol#139)
+BazaarRequests.dispute(uint256) (contracts/BazaarRequests.sol#143-151) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == r.poster,poster) (contracts/BazaarRequests.sol#145)
+	- require(bool,string)(r.state == SUBMITTED && ! r.disputed,state) (contracts/BazaarRequests.sol#146)
+	- require(bool,string)(block.timestamp < r.releaseAt,late) (contracts/BazaarRequests.sol#147)
+BazaarRequests.handBack(uint256) (contracts/BazaarRequests.sol#154-159) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(msg.sender == r.worker,worker) (contracts/BazaarRequests.sol#156)
+	- require(bool,string)(r.state == ASSIGNED || r.state == SUBMITTED,state) (contracts/BazaarRequests.sol#157)
+BazaarRequests.release(uint256) (contracts/BazaarRequests.sol#162-166) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(r.state == SUBMITTED && block.timestamp >= r.releaseAt,state) (contracts/BazaarRequests.sol#164)
+BazaarRequests.openRequests(uint256,uint256) (contracts/BazaarRequests.sol#177-191) uses timestamp for comparisons
+	Dangerous comparisons:
+	- n > limit (contracts/BazaarRequests.sol#184)
+	- i < n (contracts/BazaarRequests.sol#187)
+	- offset >= total (contracts/BazaarRequests.sol#183)
+BotOrNot.enter(bytes32) (contracts/BotOrNot.sol#68-76) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(rs.length == 0 || rs[rs.length - 1].closed,open) (contracts/BotOrNot.sol#71)
+BotOrNot.reveal(bool,bytes32) (contracts/BotOrNot.sol#95-111) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(block.timestamp >= r.startedAt + MIN_ROUND,early) (contracts/BotOrNot.sol#101)
+BotOrNot.forfeit(address) (contracts/BotOrNot.sol#114-123) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(block.timestamp > r.startedAt + MAX_ROUND,early) (contracts/BotOrNot.sol#119)
+PixelWorkshop.designsPage(uint256,uint256) (contracts/PixelWorkshop.sol#85-100) uses timestamp for comparisons
+	Dangerous comparisons:
+	- i < count (contracts/PixelWorkshop.sol#95)
+	- n > offset (contracts/PixelWorkshop.sol#91)
+	- from > limit (contracts/PixelWorkshop.sol#92)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Detectors:
+Detector: assembly
+BazaarMarket._jsonEscape(string) (contracts/BazaarMarket.sol#156-170) uses assembly
+	- INLINE ASM (contracts/BazaarMarket.sol#166-168)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+INFO:Detectors:
+Detector: low-level-calls
+Low level call in BazaarMarket.refund(uint256) (contracts/BazaarMarket.sol#439-447):
+	- (ok,None) = address(p.buyer).call{value: p.amount}() (contracts/BazaarMarket.sol#444)
+Low level call in BazaarMarket._settle(uint256,BazaarMarket.Purchase) (contracts/BazaarMarket.sol#449-458):
+	- (ok,None) = p.seller.call{value: p.amount}() (contracts/BazaarMarket.sol#454)
+Low level call in BazaarOffers.cancelOffer(uint256) (contracts/BazaarOffers.sol#70-78):
+	- (ok,None) = address(o.buyer).call{value: o.amount}() (contracts/BazaarOffers.sol#75)
+Low level call in BazaarRequests._pay(uint256,BazaarRequests.Request) (contracts/BazaarRequests.sol#193-198):
+	- (ok,None) = r.worker.call{value: r.reward}() (contracts/BazaarRequests.sol#195)
+Low level call in BazaarRequests._return(uint256,BazaarRequests.Request) (contracts/BazaarRequests.sol#200-205):
+	- (ok,None) = r.poster.call{value: r.reward}() (contracts/BazaarRequests.sol#202)
+Low level call in PixelWorkshop.collect(uint256) (contracts/PixelWorkshop.sol#56-67):
+	- (ok,None) = d.creator.call{value: msg.value}() (contracts/PixelWorkshop.sol#63)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+INFO:Detectors:
+Detector: missing-inheritance
+BazaarMarket (contracts/BazaarMarket.sol#29-516) should inherit from IBazaarMarket (contracts/BazaarOffers.sol#4-9)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-inheritance
+INFO:Detectors:
+Detector: redundant-statements
+Redundant expression "data (contracts/BazaarMarket.sol#93)" inBazaarMarket (contracts/BazaarMarket.sol#29-516)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#redundant-statements
+INFO:Slither:contracts/ analyzed (10 contracts with 102 detectors), 49 result(s) found
