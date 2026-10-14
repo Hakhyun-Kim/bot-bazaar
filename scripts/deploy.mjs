@@ -42,11 +42,12 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(key)) {
 }
 const account = privateKeyToAccount(key);
 // The testnet deployer's key sits in a browser and a GitHub secret, so it never holds real BOT.
-if (network === "mainnet") {
+// --reuse-testnet-key overrides this when the owner accepts that risk.
+if (network === "mainnet" && !argv.includes("--reuse-testnet-key")) {
   for (const f of fs.readdirSync(path.join(ROOT, "deployments")).filter((n) => /^\d+\.json$/.test(n))) {
     const d = JSON.parse(fs.readFileSync(path.join(ROOT, "deployments", f), "utf8"));
     if (d.network !== "mainnet" && d.deployer?.toLowerCase() === account.address.toLowerCase()) {
-      console.error(`${account.address} deployed ${f} (${d.network}). Use a fresh mainnet-only wallet. Stopping.`);
+      console.error(`${account.address} deployed ${f} (${d.network}). Use a fresh mainnet-only wallet, or pass --reuse-testnet-key to accept that risk. Stopping.`);
       process.exit(1);
     }
   }
