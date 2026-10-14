@@ -1018,6 +1018,7 @@ async function viewBotOrNot(el: HTMLElement) {
 
 // ---------- the bazaar as a place (src/world/World.tsx) ----------
 let world: WorldApi | null = null;
+let workshopShown = false;
 let panel: Target | null = null;
 const shopCache = new Map<Address, ShopData & { owner: Address }>();
 
@@ -1188,6 +1189,10 @@ async function viewBazaar() {
   }
   const d = await worldData();
   world.update(d);
+  // Where the workshop is all a network has (mainnet v1), it opens over the market on arrival so
+  // drawing is one look away, as it was before the 3D market came first (harry, 2026-10-14).
+  if (!workshopShown && workshopOnly() && !panel) openPanel({ kind: "tab", tab: "workshop" });
+  workshopShown = true;
   // The newest on-chain design rides on the workshop button, so pixel art shows from the first screen.
   const art = $("#to-workshop .w-cta-art");
   art.replaceChildren(...(d.designs[0] ? [patternCanvas(d.designs[0].pixels, d.designs[0].palette, 8)] : []));

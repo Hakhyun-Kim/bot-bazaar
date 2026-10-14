@@ -161,7 +161,8 @@ interface Resident {
   /** Who or what they look at while standing still (when the player is not close). */
   face?: [number, number];
   lines: string[];
-  /** Said now and then without being asked, so the market sounds busy. NPCs only, never posing as visitors. */
+  /** Said now and then without being asked, so the market sounds busy. Residents carry no NPC mark: telling bots
+   *  from people is the game (harry, 2026-10-14). The billboard's numbers stay real on-chain counts. */
   idle?: string[];
 }
 const RESIDENTS: Resident[] = [
@@ -619,7 +620,7 @@ function ResidentFigure({ r, open }: { r: Resident; open: () => void }) {
         <Trader kind={r.kind} address={r.address} />
       </group>
       <Html position={[0, 2.25, 0]} center distanceFactor={12} zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
-        {bubble ? <div className="w-say"><small>{r.name} <i>NPC</i></small>{bubble.text}</div> : <div className="w-name">{r.name} <i>NPC</i></div>}
+        {bubble ? <div className="w-say"><small>{r.name}</small>{bubble.text}</div> : <div className="w-name">{r.name}</div>}
       </Html>
     </group>
   );
@@ -1183,7 +1184,7 @@ function Root({ open }: { open: (t: Target) => void }) {
         <Scene open={open} setNear={setNear} />
       </Canvas>
       <ErrandChip />
-      <Billboard />
+      <Billboard open={open} />
       <div className="w-emotes" role="toolbar" aria-label="Emotes">
         {EMOTES.map((e) => (
           <button key={e.icon} type="button" title={e.name} aria-label={e.name} onClick={() => doEmote(e.icon)}>{e.icon}</button>
@@ -1197,7 +1198,7 @@ function Root({ open }: { open: (t: Target) => void }) {
         ) : (
           <span>
             {touch ? "Tap the ground to walk" : "WASD / arrows or click the ground to walk"}
-            {d.soon ? " · tap a resident to chat" : touch ? ", tap a stall to trade" : " · click a stall to trade"}
+            {d.soon ? " · tap the 🎨 easel or the board to draw pixel art" : touch ? ", tap a stall to trade" : " · click a stall to trade"}
           </span>
         )}
       </div>
@@ -1206,7 +1207,7 @@ function Root({ open }: { open: (t: Target) => void }) {
 }
 
 /** The market's LED billboard: real on-chain numbers only, and news when a design arrives. */
-function Billboard() {
+function Billboard({ open }: { open: (t: Target) => void }) {
   const d = useData();
   useChat();
   const [, tick] = useState(0);
@@ -1218,7 +1219,6 @@ function Billboard() {
   }, [live]);
   const st = d.stats;
   const newest = d.designs[0];
-  if (!st.total && !live) return null;
   const text = live
     ? live.text
     : [
@@ -1228,9 +1228,10 @@ function Billboard() {
         newest ? `🖼️ newest “${newest.name}” by ${short(newest.creator)}, ${ago(st.now - newest.createdAt)}` : "",
       ].filter(Boolean).join("   ·   ");
   return (
-    <div className={`w-ticker${live ? " news" : ""}`} aria-live="polite">
-      <span key={text}>{text}</span>
-    </div>
+    <button type="button" className={`w-ticker${live ? " news" : ""}`} aria-live="polite" onClick={() => open({ kind: "tab", tab: "workshop" })}>
+      <b>🎨 Draw pixel art ›</b>
+      <i><span key={text}>{text || "Publish the first design on BOT Chain"}</span></i>
+    </button>
   );
 }
 
