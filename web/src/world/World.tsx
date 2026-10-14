@@ -12,6 +12,7 @@ import { Html, Outlines } from "@react-three/drei";
 import { Color, DataTexture, Group, InstancedMesh, Mesh, MeshBasicMaterial, NearestFilter, Object3D, RedFormat, Vector3 } from "three";
 import { PRESET16, decodePixels } from "../pixel";
 import { completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
+import { joinMarket, leaveMarket, myName, onPeerEmote, peers, peersVersion, setMyName, subscribePeers, tellEmote, tellPose } from "./peers";
 
 export type Tab = "requests" | "botornot" | "workshop" | "projects" | "account";
 export type Target = { kind: "shop"; owner: string } | { kind: "tab"; tab: Tab };
@@ -46,6 +47,8 @@ export interface WorldApi {
   announce(designs: WorldData["designs"]): void;
   /** Something outside the 3D scene (the Pixel Workshop button) counts toward today's errand. */
   errand(id: ErrandId): void;
+  /** Meet the other people on this network in the market (see peers.ts). */
+  room(network: string): void;
   destroy(): void;
 }
 
@@ -130,7 +133,7 @@ const useData = () => useSyncExternalStore(subscribe, () => data);
 const usePulses = () => useSyncExternalStore(subscribe, () => pulses);
 
 /** Where the player is, for the camera, collisions and the nearest-thing hint. */
-const player = { x: 0, z: 9, target: null as null | { x: number; z: number } };
+const player = { x: Math.random() * 4 - 2, z: 9 + Math.random() * 2, target: null as null | { x: number; z: number } };
 interface Spot {
   x: number;
   z: number;
@@ -306,8 +309,12 @@ function doEmote(icon: string) {
     const at = residentAt.get(r.id);
     return at && Math.hypot(at.x - p.x, at.z - p.z) < 6;
   });
-  bubbles.set("me", { text: near.length ? `${icon} together ×${near.length + 1}` : icon, emote: icon, until: now + 2200 });
+  const people = [...peers.values()].filter((o) => Math.hypot(o.x - p.x, o.z - p.z) < 6).length;
+  const n = near.length + people;
+  bubbles.set("me", { text: n ? `${icon} together ×${n + 1}` : icon, emote: icon, until: now + 2200 });
+  tellEmote(icon);
   chatEmit();
+  if (people && !near.length) finishErrand("together");
   if (!near.length) return;
   setTimeout(() => {
     const t = performance.now();
@@ -316,6 +323,12 @@ function doEmote(icon: string) {
     finishErrand("together");
   }, 450);
 }
+
+// Someone else in the market emotes: it shows over their head, like anyone's.
+onPeerEmote((id, icon) => {
+  bubbles.set(`p:${id}`, { text: icon, emote: icon, until: performance.now() + 2200 });
+  chatEmit();
+});
 
 // ---------- figures (chibi: big heads, small bodies) ----------
 function Eyes({ z, y = 0, gap = 0.1, size = 0.045 }: { z: number; y?: number; gap?: number; size?: number }) {
@@ -438,12 +451,12 @@ function Hooded({ cloak = "#8f84b3" }: { cloak?: string }) {
 }
 
 /** A trader as they declared themselves; undeclared ones keep their hood up. */
-export function Trader({ kind, address, you }: { kind: number; address: string; you?: boolean }) {
+export function Trader({ kind, address, you, cloak }: { kind: number; address: string; you?: boolean; cloak?: string }) {
   const color = hue(address.toLowerCase());
   if (kind === 2) return <Robot color={color} />;
   if (kind === 1) return <Human color={color} />;
   if (kind === 3) return (<group><Human color={color} /><Drone color={color} /></group>);
-  return <Hooded cloak={you ? "#4cc3d9" : undefined} />;
+  return <Hooded cloak={you ? "#4cc3d9" : cloak} />;
 }
 
 // ---------- places ----------
@@ -635,6 +648,41 @@ function emoteMotion(o: Group, b: { emote?: string; until: number } | undefined,
   if (b!.emote === "🙇") o.rotation.x = 0.45;
   else if (b!.emote === "💃") (o.rotation.y = t * 9), (o.position.y = Math.abs(Math.sin(t * 9)) * 0.15);
   else o.position.y = Math.abs(Math.sin(t * 10)) * 0.25;
+}
+
+/** Another person in the market, drawn like everyone else (no marks: bot or not is the game). */
+function PeerFigure({ id }: { id: string }) {
+  const bubble = useBubble(`p:${id}`);
+  const g = useRef<Group>(null);
+  const body = useRef<Group>(null);
+  const p = peers.get(id);
+  useFrame((_, raw) => {
+    const q = peers.get(id);
+    if (!g.current || !q) return;
+    const k = 1 - Math.pow(0.0005, Math.min(raw, 0.1));
+    const o = g.current.position;
+    if (o.lengthSq() === 0) o.set(q.x, 0, q.z);
+    else o.set(o.x + (q.x - o.x) * k, 0, o.z + (q.z - o.z) * k);
+    let dr = q.ry - g.current.rotation.y;
+    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    g.current.rotation.y += dr * k;
+    if (body.current) emoteMotion(body.current, bubbles.get(`p:${id}`), performance.now() / 1000);
+  });
+  if (!p) return null;
+  return (
+    <group ref={g}>
+      <group ref={body}>
+        <Trader kind={p.kind} address={p.seed} cloak={hue(p.seed)} />
+      </group>
+      <Html position={[0, 2.25, 0]} center distanceFactor={12} zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
+        {bubble ? <div className="w-say"><small>{p.name}</small>{bubble.text}</div> : <div className="w-name">{p.name}</div>}
+      </Html>
+    </group>
+  );
+}
+function People() {
+  useSyncExternalStore(subscribePeers, peersVersion);
+  return <>{[...peers.keys()].map((id) => <PeerFigure key={id} id={id} />)}</>;
 }
 
 /** Escrow as a parcel locker: paid goods wait in a box until the buyer says OK. */
@@ -1015,6 +1063,8 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
   const body = useRef<Group>(null);
   const bubble = useBubble("me");
   const narrow = useThree((s) => s.size.width < 640);
+  useChat();
+  const name = myName();
 
   useEffect(() => {
     const typing = () => {
@@ -1076,7 +1126,7 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
       player.z = nz;
       if (g.current) g.current.rotation.y = Math.atan2(dx, dz);
     }
-    if (g.current) g.current.position.set(player.x, 0, player.z);
+    if (g.current) g.current.position.set(player.x, 0, player.z), tellPose(player.x, player.z, g.current.rotation.y, d.myKind);
     const off = narrow ? new Vector3(0, 10.5, 12) : new Vector3(0, 7, 9.5);
     camera.position.lerp(new Vector3(player.x + off.x, off.y, player.z + off.z), 1 - Math.pow(0.002, dt));
     look.current.lerp(new Vector3(player.x, 1, player.z - 2), 1 - Math.pow(0.002, dt));
@@ -1107,7 +1157,7 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
         <Trader kind={d.myKind} address={d.me ?? "0x0"} you />
       </group>
       <Html position={[0, 2.2, 0]} center distanceFactor={12} zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-        {bubble ? <div className="w-say me">{bubble.text}</div> : <div className="w-me">You</div>}
+        {bubble ? <div className="w-say me">{bubble.text}</div> : <div className="w-me">You · {name}</div>}
       </Html>
     </group>
   );
@@ -1165,6 +1215,7 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
       {gallery.map(({ slot, design }, i) => <GalleryStand key={`g${i}`} slot={slot} design={design} n={i} open={open} />)}
       {shut.map((slot, i) => <SoonStall key={i} slot={slot} open={open} />)}
       {RESIDENTS.map((r) => <ResidentFigure key={r.id} r={r} open={() => talk(r)} />)}
+      <People />
       <Player spots={spots} setNear={setNear} open={open} />
     </>
   );
@@ -1189,6 +1240,7 @@ function Root({ open }: { open: (t: Target) => void }) {
         {EMOTES.map((e) => (
           <button key={e.icon} type="button" title={e.name} aria-label={e.name} onClick={() => doEmote(e.icon)}>{e.icon}</button>
         ))}
+        <button type="button" title="Your name" aria-label="Your name" onClick={rename}>🏷️</button>
       </div>
       <div className="w-hud">
         {near?.act || near?.target ? (
@@ -1235,6 +1287,14 @@ function Billboard({ open }: { open: (t: Target) => void }) {
   );
 }
 
+/** The name friends see over your head. */
+function rename() {
+  const n = prompt("Your name in the market (friends see it over your head):", myName());
+  if (n == null) return;
+  setMyName(n);
+  chatEmit();
+}
+
 /** Today's errand, under the Pixel Workshop button. */
 function ErrandChip() {
   useChat();
@@ -1265,7 +1325,11 @@ export function mountWorld(el: HTMLElement, open: (t: Target) => void): WorldApi
     announce(list) {
       announce(list);
     },
+    room(network) {
+      joinMarket(network);
+    },
     destroy() {
+      void leaveMarket();
       root.unmount();
     },
   };

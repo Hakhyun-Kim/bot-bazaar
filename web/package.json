@@ -19,6 +19,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "^0.185.1",
+    "trystero": "0.25.4",
     "viem": "^2.21.0"
   },
   "devDependencies": {

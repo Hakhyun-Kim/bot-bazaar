@@ -1187,6 +1187,7 @@ async function viewBazaar() {
     const { mountWorld } = await import("./world/World");
     world = mountWorld($("#world"), openPanel);
   }
+  world.room(networkKey);
   const d = await worldData();
   world.update(d);
   // Where the workshop is all a network has (mainnet v1), it opens over the market on arrival so
