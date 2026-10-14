@@ -416,6 +416,8 @@ async function viewProjects(el: HTMLElement) {
 async function viewWorkshop(el: HTMLElement) {
   const [ids, list] = await read<[bigint[], { creator: Address; name: string; price: bigint; mints: number; pixels: string; palette: number }[]]>(
     "PixelWorkshop", "designsPage", [0n, 48n]);
+  // Mainnet's workshop is free-only; the testnet set predates the flag, so a failed read means priced designs are allowed.
+  const freeOnly = await read<boolean>("PixelWorkshop", "freeOnly").catch(() => false);
   const cells = new Array<number>(64).fill(0);
   let brush = 1;
   const slots = [0, 1, 5, 3];
@@ -426,7 +428,7 @@ async function viewWorkshop(el: HTMLElement) {
       <div>
         <div id="slots"></div>
         <form id="design"><input name="name" placeholder="Design name" maxlength="36" required />
-          <input name="price" placeholder="Price in BOT (0 = free)" value="0" />
+          ${freeOnly ? "" : `<input name="price" placeholder="Price in BOT (0 = free)" value="0" />`}
           <button>Publish on-chain</button></form>
       </div>
     </section>

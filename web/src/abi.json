@@ -3315,6 +3315,17 @@
   {
    "inputs": [
     {
+     "internalType": "bool",
+     "name": "freeOnly_",
+     "type": "bool"
+    }
+   ],
+   "stateMutability": "nonpayable",
+   "type": "constructor"
+  },
+  {
+   "inputs": [
+    {
      "internalType": "uint256",
      "name": "expected",
      "type": "uint256"
@@ -3552,6 +3563,19 @@
      "internalType": "struct PixelWorkshop.Design[]",
      "name": "list",
      "type": "tuple[]"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [],
+   "name": "freeOnly",
+   "outputs": [
+    {
+     "internalType": "bool",
+     "name": "",
+     "type": "bool"
     }
    ],
    "stateMutability": "view",

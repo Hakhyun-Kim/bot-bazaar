@@ -231,7 +231,7 @@ export class DemoChain {
       BazaarProjects: "0x",
       AgentPass: "0x",
       BotOrNot: encodeAbiParameters([{ type: "address" }], [c.AgentPass.address]),
-      PixelWorkshop: "0x",
+      PixelWorkshop: encodeAbiParameters([{ type: "bool" }], [false]),
     };
     for (const name of Object.keys(args) as Name[]) {
       const r = await this.send(DEPLOYER, null, `${BYTECODE[name]}${args[name].slice(2)}` as Hex);

@@ -235,13 +235,22 @@ await check("clearing the profile design", async () => {
   await write(buyer, "PixelWorkshop", "setProfileDesign", [0n]);
   eq((await read("PixelWorkshop", "profileDesignOf", [addr(buyer)]))[0], false);
 });
-await check("deploys alone (the first mainnet version)", async () => {
-  const solo = await deployOne({ pub: node.pub, wallet: deployer, artifacts, name: "PixelWorkshop" });
+await check("deploys alone and free-only (the first mainnet version)", async () => {
+  const solo = await deployOne({ pub: node.pub, wallet: deployer, artifacts, name: "PixelWorkshop", args: [true] });
   eq(Object.keys(solo).join(), "PixelWorkshop");
   const w = { address: solo.PixelWorkshop.address, abi: artifacts.PixelWorkshop.abi };
   const { request } = await node.pub.simulateContract({ ...w, functionName: "register", args: ["Solo", pixels, 1, 0n], account: other.account });
   await node.pub.waitForTransactionReceipt({ hash: await other.writeContract(request) });
   eq(await node.pub.readContract({ ...w, functionName: "designCount" }), 1n);
+  eq(await node.pub.readContract({ ...w, functionName: "freeOnly" }), true);
+  try {
+    await node.pub.simulateContract({ ...w, functionName: "register", args: ["Priced", pixels, 1, 1n], account: other.account });
+    throw new Error("a free-only workshop accepted a price");
+  } catch (e) {
+    if (!String(e.message).includes("free-only")) throw e;
+  }
+  const { request: c } = await node.pub.simulateContract({ ...w, functionName: "collect", args: [0n], account: buyer.account });
+  await node.pub.waitForTransactionReceipt({ hash: await buyer.writeContract(c) });
 });
 
 console.log("\nbots and humans");

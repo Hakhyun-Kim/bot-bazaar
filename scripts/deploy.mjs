@@ -79,10 +79,15 @@ if (!yes) {
   process.exit(0);
 }
 const log = (l) => console.log(`  ${l}`);
-const contracts = only ? await deployOne({ pub, wallet, artifacts, name: only, log }) : await deployAll({ pub, wallet, artifacts, log });
+// Mainnet's workshop is free-only: designs cannot carry a price (commerce is not in the first version).
+const freeOnly = network === "mainnet";
+const contracts = only
+  ? await deployOne({ pub, wallet, artifacts, name: only, args: [freeOnly], log })
+  : await deployAll({ pub, wallet, artifacts, freeOnly, log });
 const record = {
   chainId: chain.id,
   network,
+  freeOnly,
   deployer: account.address,
   deployedAt: new Date().toISOString(),
   compiler: { solc: SOLC_VERSION, evmVersion: SETTINGS.evmVersion, optimizer: SETTINGS.optimizer },

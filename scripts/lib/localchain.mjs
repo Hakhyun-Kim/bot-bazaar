@@ -107,18 +107,19 @@ function deployer({ pub, wallet, artifacts, log }, out) {
   };
 }
 
-/** Deploy one stand-alone contract (PixelWorkshop: no constructor arguments, no links). */
-export async function deployOne({ pub, wallet, artifacts, name, log = () => {} }) {
+/** Deploy one stand-alone contract (PixelWorkshop: no links to the others). */
+export async function deployOne({ pub, wallet, artifacts, name, args = [], log = () => {} }) {
   const out = {};
-  await deployer({ pub, wallet, artifacts, log }, out)(name);
+  await deployer({ pub, wallet, artifacts, log }, out)(name, args);
   return out;
 }
 
 /**
  * Deploy all seven in the fixed order used by scripts/deploy.mjs.
  * BazaarMarket takes the offers address in its constructor, so it is predicted from the next nonce.
+ * freeOnly makes the Pixel Workshop refuse priced designs (mainnet: no BOT moves through it).
  */
-export async function deployAll({ pub, wallet, artifacts, log = () => {} }) {
+export async function deployAll({ pub, wallet, artifacts, freeOnly = false, log = () => {} }) {
   const from = wallet.account.address;
   const out = {};
   const deploy = deployer({ pub, wallet, artifacts, log }, out);
@@ -133,6 +134,6 @@ export async function deployAll({ pub, wallet, artifacts, log = () => {} }) {
   await deploy("BazaarProjects");
   const pass = await deploy("AgentPass");
   await deploy("BotOrNot", [pass]);
-  await deploy("PixelWorkshop");
+  await deploy("PixelWorkshop", [freeOnly]);
   return out;
 }

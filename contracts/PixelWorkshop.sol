@@ -8,7 +8,10 @@ pragma solidity ^0.8.24;
 /// Creating is free (gas only). A creator may optionally set a price; buyers then pay the creator
 /// directly with no intermediary. A design is a creative good, not a gameplay reward, so selling it
 /// is allowed; owning a copy is a non-transferable right to display it (setProfileDesign).
+/// A free-only deployment (the first mainnet version) refuses any price, so no BOT moves through it.
 contract PixelWorkshop {
+    bool public immutable freeOnly;
+
     struct Design {
         address payable creator;
         uint64 createdAt;
@@ -29,6 +32,10 @@ contract PixelWorkshop {
 
     error WrongPrice(uint256 expected, uint256 sent);
 
+    constructor(bool freeOnly_) {
+        freeOnly = freeOnly_;
+    }
+
     function register(
         string calldata name,
         bytes16 pixels,
@@ -36,6 +43,7 @@ contract PixelWorkshop {
         uint128 price
     ) external returns (uint256 id) {
         require(bytes(name).length >= 1 && bytes(name).length <= 36, "name");
+        require(price == 0 || !freeOnly, "free-only");
         id = _designs.length;
         _designs.push(
             Design(payable(msg.sender), uint64(block.timestamp), 0, price, palette, pixels, name)

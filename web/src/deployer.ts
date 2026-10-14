@@ -31,6 +31,6 @@ export async function deployFromBrowser(pub: PublicClient, wallet: WalletClient,
   await deploy("BazaarProjects");
   const pass = await deploy("AgentPass");
   await deploy("BotOrNot", [pass]);
-  await deploy("PixelWorkshop");
+  await deploy("PixelWorkshop", [false]);
   return { chainId, network: "testnet", deployer: from, deployedAt: new Date().toISOString(), deployedFrom: "browser", contracts } as Deployment;
 }
