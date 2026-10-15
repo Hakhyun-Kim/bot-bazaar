@@ -8,8 +8,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Html, Outlines } from "@react-three/drei";
-import { Color, Group, InstancedMesh, Mesh, MeshBasicMaterial, Object3D, Vector3 } from "three";
+import { Html, Outlines, PerformanceMonitor } from "@react-three/drei";
+import { Color, Group, InstancedMesh, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Vector3 } from "three";
 import { PRESET16, decodePixels } from "../pixel";
 import { Trader, type Mood } from "./characters";
 import { BlobShadow, Props, type PropAt } from "./props";
@@ -17,6 +17,8 @@ import { GRAD, INK, hue } from "./toon";
 import { completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
 import { joinMarket, leaveMarket, myName, onPeerEmote, peers, peersVersion, setMyName, subscribePeers, tellEmote, tellPose } from "./peers";
 import { finishTour, subscribeTour, tour, walkTour } from "./tour";
+import { BEACH_IN, WaterPark, useLevel } from "./waterpark";
+import { DPR, LEVEL_NAME, autoStep, chooseScenery, scenery, type Choice } from "./scenery";
 
 export type Tab = "requests" | "botornot" | "workshop" | "projects" | "account";
 export type Target = { kind: "shop"; owner: string } | { kind: "tab"; tab: Tab };
@@ -919,6 +921,10 @@ function Cloud({ x, y, z, s }: { x: number; y: number; z: number; s: number }) {
   );
 }
 
+const walkTo = (x: number, z: number) => {
+  player.target = { x, z };
+  tour.walking = false;
+};
 function Ground() {
   const paths = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
   return (
@@ -926,10 +932,9 @@ function Ground() {
       <mesh rotation={[-Math.PI / 2, 0, 0]}
         onClick={(e) => {
           e.stopPropagation();
-          player.target = { x: e.point.x, z: e.point.z };
-          tour.walking = false;
+          walkTo(e.point.x, e.point.z);
         }}>
-        <circleGeometry args={[WORLD_R + 40, 64]} />
+        <circleGeometry args={[BEACH_IN + 0.5, 64]} />
         <meshToonMaterial color="#9ed97a" gradientMap={GRAD} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
@@ -1085,6 +1090,11 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
   const narrow = useThree((s) => s.size.width < 640);
   useChat();
   const name = myName();
+  useEffect(() => {
+    const cam = camera as PerspectiveCamera;
+    cam.fov = narrow ? 56 : 50; // a tall phone screen is narrow: a little wider so the beach fits
+    cam.updateProjectionMatrix();
+  }, [camera, narrow]);
 
   useEffect(() => {
     const typing = () => {
@@ -1160,7 +1170,8 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
     if (g.current) g.current.position.set(player.x, 0, player.z), tellPose(player.x, player.z, g.current.rotation.y, d.myKind);
     const off = narrow ? new Vector3(0, 10.5, 12) : new Vector3(0, 7, 9.5);
     camera.position.lerp(new Vector3(player.x + off.x, off.y, player.z + off.z), 1 - Math.pow(0.002, dt));
-    look.current.lerp(new Vector3(player.x, 1, player.z - 2), 1 - Math.pow(0.002, dt));
+    // aimed a little above the player so the sea, the horizon and the sun show over the market
+    look.current.lerp(new Vector3(player.x, narrow ? LOOK_Y_NARROW : LOOK_Y, player.z - 2), 1 - Math.pow(0.002, dt));
     camera.lookAt(look.current);
 
     let best: Spot | null = null;
@@ -1195,6 +1206,9 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
   );
 }
 
+const LOOK_Y = 3.4;
+const LOOK_Y_NARROW = 4.6;
+
 // ---------- the whole scene ----------
 function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot | null) => void }) {
   const d = useData();
@@ -1225,12 +1239,13 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
   }, [d]);
   return (
     <>
-      <color attach="background" args={["#bfe9ff"]} />
-      <fog attach="fog" args={["#bfe9ff", 45, 95]} />
+      <color attach="background" args={["#dbf5ff"]} />
+      <fog attach="fog" args={["#d6f2ff", 55, 140]} />
       <ambientLight intensity={0.9} />
       <hemisphereLight args={["#ffffff", "#9ed97a", 0.7]} />
       <directionalLight position={[12, 20, 10]} intensity={1.6} color="#fff2d6" />
       <Ground />
+      <WaterPark onWalk={walkTo} />
       <Bunting />
       {TREES.map((t, i) => <Tree key={i} {...t} />)}
       <Props list={PROPS} />
@@ -1264,9 +1279,12 @@ function Root({ open }: { open: (t: Target) => void }) {
     return () => clearInterval(id);
   }, []);
   const touch = matchMedia("(pointer: coarse)").matches;
+  const level = useLevel();
   return (
     <>
-      <Canvas camera={{ position: [0, 7, 18.5], fov: 50 }} dpr={[1, 1.75]}>
+      <Canvas camera={{ position: [0, 7, 18.5], fov: 50, far: 1200 }} dpr={DPR[level]}>
+        {/* Auto follows the frame rate: a steady drop steps the background down, a steady surplus up */}
+        <PerformanceMonitor flipflops={4} onDecline={() => autoStep(-1)} onIncline={() => autoStep(1)} onFallback={() => autoStep("floor")} />
         <Scene open={open} setNear={setNear} />
       </Canvas>
       <ErrandChip />
@@ -1277,6 +1295,7 @@ function Root({ open }: { open: (t: Target) => void }) {
           <button key={e.icon} type="button" title={e.name} aria-label={e.name} onClick={() => doEmote(e.icon)}>{e.icon}</button>
         ))}
         <button type="button" title="Your name" aria-label="Your name" onClick={rename}>🏷️</button>
+        <SceneryMenu />
       </div>
       <div className="w-hud">
         {near?.act || near?.target ? (
@@ -1290,6 +1309,31 @@ function Root({ open }: { open: (t: Target) => void }) {
           </span>
         )}
       </div>
+    </>
+  );
+}
+
+/** 🏖️ next to the emotes: how much water park to draw. Auto shows what it picked. */
+function SceneryMenu() {
+  const level = useLevel();
+  const [show, setShow] = useState(false);
+  const pick = (c: Choice) => (chooseScenery(c), setShow(false));
+  const opts: [Choice, string][] = [["auto", `Auto · ${LEVEL_NAME[scenery.auto]}`], [0, "Light"], [1, "Normal"], [2, "Full"]];
+  return (
+    <>
+      <button type="button" title={`Background: ${scenery.choice === "auto" ? "Auto" : LEVEL_NAME[level]}`}
+        aria-label="Background detail" aria-expanded={show} onClick={() => setShow(!show)}>🏖️</button>
+      {show && (
+        <div className="w-scenery" role="menu" aria-label="Background detail">
+          <b>Water park background</b>
+          {opts.map(([c, label]) => (
+            <button key={String(c)} type="button" role="menuitemradio" aria-checked={scenery.choice === c} className={scenery.choice === c ? "on" : ""} onClick={() => pick(c)}>
+              {label}
+            </button>
+          ))}
+          <small>Light is easiest on phones and batteries.</small>
+        </div>
+      )}
     </>
   );
 }
