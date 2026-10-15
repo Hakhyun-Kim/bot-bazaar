@@ -472,3 +472,10 @@ does not depend on which later upgrades a chain has enabled.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+### Music
+
+"Market Day" (`web/src/assets/market-theme.mp3`) is an original composition for BOT Bazaar, rendered by
+`scripts/music/render-theme.py` with instrument samples from the Fluid R3 GM SoundFont as packaged by
+[gleitz/midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts) (Creative Commons Attribution 3.0).
+It starts after the first tap or key press and the 🎵 button in the header turns it off.

@@ -24,6 +24,7 @@ import { TABS, tabsFor, type Tab } from "./screens";
 import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
 import { PRACTICE, nextPractice } from "./world/errands";
 import { finishTour, tour } from "./world/tour";
+import { setupMusic } from "./music";
 import "./style.css";
 
 type Name = keyof Deployment["contracts"];
@@ -1372,6 +1373,7 @@ $("#connect").addEventListener("click", () => {
   renderWallet();
   void refreshBalance();
 });
+setupMusic($<HTMLButtonElement>("#music"));
 // The workshop opens as a panel over the 3D market, the same as clicking the easel.
 $("#to-workshop").addEventListener("click", () => openPanel({ kind: "tab", tab: "workshop" }));
 $("#panel-close").addEventListener("click", () => {
