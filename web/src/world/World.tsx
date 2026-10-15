@@ -9,8 +9,11 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { createRoot } from "react-dom/client";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html, Outlines } from "@react-three/drei";
-import { Color, DataTexture, Group, InstancedMesh, Mesh, MeshBasicMaterial, NearestFilter, Object3D, RedFormat, Vector3 } from "three";
+import { Color, Group, InstancedMesh, Mesh, MeshBasicMaterial, Object3D, Vector3 } from "three";
 import { PRESET16, decodePixels } from "../pixel";
+import { Trader, type Mood } from "./characters";
+import { BlobShadow, Props, type PropAt } from "./props";
+import { GRAD, INK, hue } from "./toon";
 import { completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
 import { joinMarket, leaveMarket, myName, onPeerEmote, peers, peersVersion, setMyName, subscribePeers, tellEmote, tellPose } from "./peers";
 import { finishTour, subscribeTour, tour, walkTour } from "./tour";
@@ -61,25 +64,12 @@ const ago = (sec: number) =>
 /** Awning colours by category: goods, services, developer assets, agent services */
 const CAT = ["#ff8a5c", "#4fa8ff", "#5ccf7a", "#b98cff"];
 const CAT_NAME = ["Goods", "Service", "Dev asset", "Agent service"];
-const INK = "#3a2e3f";
 const WOOD = "#c98b52";
 const WOOD_DARK = "#8a5a35";
 const CREAM = "#fff6e6";
 const GOODS = ["#ffd166", "#ef476f", "#06d6a0", "#118ab2", "#ff9f1c"];
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const hue = (a: string) => {
-  let h = 0;
-  for (let i = 2; i < a.length; i++) h = (h * 31 + a.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360}, 75%, 64%)`;
-};
 
-/** Three flat bands of light: the cartoon look comes from this plus ink outlines. */
-const GRAD = (() => {
-  const t = new DataTexture(new Uint8Array([90, 175, 255]), 3, 1, RedFormat);
-  t.minFilter = t.magFilter = NearestFilter;
-  t.needsUpdate = true;
-  return t;
-})();
 
 type V3 = [number, number, number];
 /** One cartoon part: geometry as the child, toon paint and an ink outline. */
@@ -90,7 +80,7 @@ function P({ children, color, position, rotation, scale, line = 0.03 }: {
     <mesh position={position} rotation={rotation} scale={scale}>
       {children}
       <meshToonMaterial color={color} gradientMap={GRAD} />
-      {line ? <Outlines thickness={line} color={INK} /> : null}
+      {line ? <Outlines thickness={line * 70} color={INK} /> : null}
     </mesh>
   );
 }
@@ -123,6 +113,32 @@ const TREES = Array.from({ length: 26 }, (_, i) => {
   const r = 21.5 + ((i * 7) % 5);
   return { x: Math.sin(a) * r, z: -Math.cos(a) * r, s: 0.9 + ((i * 13) % 7) / 10, kind: i % 3 };
 }).filter((t) => Math.abs(t.x) > 3 && Math.abs(t.z) > 3); // keep the paths open
+
+/** Props from Blender, placed by a fixed rule like the trees: lamps by each path, crates and barrels
+ *  behind the outer stalls, pot plants round the lockers, flower bushes along the edge of the sand. */
+const PATHS = [0, 90, 180, 270];
+const PROPS: PropAt[] = (() => {
+  const out: PropAt[] = [];
+  const at = (deg: number, r: number) => {
+    const a = (deg * Math.PI) / 180;
+    return { x: Math.sin(a) * r, z: -Math.cos(a) * r };
+  };
+  for (const p of PATHS) for (const s of [-1, 1]) out.push({ kind: "lamp", ...at(p + s * 6.5, 17.9), rot: (-p * Math.PI) / 180 + Math.PI });
+  SLOTS.forEach((sl, i) => {
+    if (i < 10) return; // only the outer ring: the inner one backs onto the walkway
+    const back = (lx: number, lz: number) => ({ x: sl.x + Math.cos(sl.rot) * lx + Math.sin(sl.rot) * lz, z: sl.z - Math.sin(sl.rot) * lx + Math.cos(sl.rot) * lz });
+    out.push({ kind: i % 2 ? "barrel" : "crate", ...back(1.15, -1.35), rot: sl.rot + i });
+    if (i % 3 === 0) out.push({ kind: "crate", ...back(-1.1, -1.4), rot: sl.rot - 0.3, s: 0.8 });
+  });
+  for (const d of [45, 135, 225, 315]) out.push({ kind: "pot", ...at(d, 3.3) });
+  const tints = ["#ff8fb0", "#ffd166", "#ffffff", "#b98cff", "#ff8a5c"];
+  for (let i = 0; i < 36; i++) {
+    const d = i * 10 + 5;
+    if (PATHS.some((p) => Math.abs(((d - p + 540) % 360) - 180) < 9)) continue;
+    out.push({ kind: "bush", ...at(d + ((i * 7) % 5) - 2, 18.9 + ((i * 3) % 4) * 0.35), rot: i, s: 0.75 + ((i * 5) % 4) * 0.12, tint: tints[i % tints.length] });
+  }
+  return out;
+})();
 
 // ---------- data store shared with main.ts ----------
 let data: WorldData = EMPTY;
@@ -237,6 +253,18 @@ let chatVersion = 0;
 const chatEmit = () => (chatVersion++, emit());
 const useChat = () => useSyncExternalStore(subscribe, () => chatVersion);
 const lineIndex = new Map<string, number>();
+/** What someone is doing now, for their figure's arms and face (see characters.tsx). */
+const moods = new Map<string, Mood>();
+function moodOf(id: string): Mood {
+  let m = moods.get(id);
+  if (!m)
+    moods.set(id, (m = () => {
+      const b = bubbles.get(id);
+      if (!b || b.until <= performance.now()) return undefined;
+      return { emote: b.emote, talking: !b.emote && !!b.text };
+    }));
+  return m;
+}
 /** The bubble someone shows now; re-renders once more when it runs out. */
 function useBubble(id: string) {
   useChat();
@@ -331,135 +359,6 @@ onPeerEmote((id, icon) => {
   chatEmit();
 });
 
-// ---------- figures (chibi: big heads, small bodies) ----------
-function Eyes({ z, y = 0, gap = 0.1, size = 0.045 }: { z: number; y?: number; gap?: number; size?: number }) {
-  return (
-    <>
-      {[-gap, gap].map((x) => (
-        <mesh key={x} position={[x, y, z]}>
-          <sphereGeometry args={[size, 10, 10]} />
-          <meshBasicMaterial color={INK} />
-        </mesh>
-      ))}
-    </>
-  );
-}
-
-function useBob(speed = 1.6, height = 0.05) {
-  const ref = useRef<Group>(null);
-  const seed = useMemo(() => Math.random() * 10, []);
-  useFrame(({ clock }) => {
-    if (ref.current) ref.current.position.y = Math.abs(Math.sin(clock.elapsedTime * speed + seed)) * height;
-  });
-  return ref;
-}
-
-function Robot({ color }: { color: string }) {
-  const bob = useBob(2.2, 0.06);
-  return (
-    <group ref={bob}>
-      {[-0.14, 0.14].map((x) => (
-        <P key={x} color="#8d95a8" position={[x, 0.16, 0]}><cylinderGeometry args={[0.08, 0.1, 0.32, 10]} /></P>
-      ))}
-      <P color={color} position={[0, 0.58, 0]}><boxGeometry args={[0.6, 0.55, 0.45]} /></P>
-      {[-0.38, 0.38].map((x) => (
-        <P key={x} color="#8d95a8" position={[x, 0.6, 0]} rotation={[0, 0, x > 0 ? -0.5 : 0.5]}><cylinderGeometry args={[0.05, 0.05, 0.36, 8]} /></P>
-      ))}
-      <P color="#eef1f7" position={[0, 1.18, 0]}><boxGeometry args={[0.78, 0.62, 0.6]} /></P>
-      <mesh position={[0, 1.18, 0.305]}>
-        <planeGeometry args={[0.58, 0.4]} />
-        <meshBasicMaterial color="#2c3550" />
-      </mesh>
-      {[-0.13, 0.13].map((x) => (
-        <mesh key={x} position={[x, 1.21, 0.31]}>
-          <circleGeometry args={[0.07, 16]} />
-          <meshBasicMaterial color="#8ff0ff" />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.08, 0.31]}>
-        <planeGeometry args={[0.16, 0.035]} />
-        <meshBasicMaterial color="#8ff0ff" />
-      </mesh>
-      <P color="#8d95a8" position={[0, 1.6, 0]}><cylinderGeometry args={[0.025, 0.025, 0.24, 6]} /></P>
-      <P color={color} position={[0, 1.75, 0]}><sphereGeometry args={[0.08, 12, 12]} /></P>
-    </group>
-  );
-}
-
-function Human({ color }: { color: string }) {
-  const bob = useBob();
-  return (
-    <group ref={bob}>
-      <P color={color} position={[0, 0.42, 0]}><cylinderGeometry args={[0.2, 0.32, 0.72, 16]} /></P>
-      <P color="#ffd7b5" position={[0, 1.12, 0]}><sphereGeometry args={[0.36, 20, 20]} /></P>
-      <P color="#5a3a2a" position={[0, 1.22, -0.03]} scale={[1.06, 0.82, 1.06]}>
-        <sphereGeometry args={[0.36, 20, 20, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </P>
-      <Eyes z={0.33} y={1.1} gap={0.12} size={0.05} />
-      <mesh position={[0, 1.0, 0.33]}>
-        <circleGeometry args={[0.05, 12, Math.PI, Math.PI]} />
-        <meshBasicMaterial color={INK} />
-      </mesh>
-      {[-0.2, 0.2].map((x) => (
-        <mesh key={x} position={[x, 1.03, 0.3]}>
-          <circleGeometry args={[0.05, 12]} />
-          <meshBasicMaterial color="#ff9fae" transparent opacity={0.7} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function Drone({ color }: { color: string }) {
-  const g = useRef<Group>(null);
-  const blade = useRef<Mesh>(null);
-  useFrame(({ clock }, dt) => {
-    const t = clock.elapsedTime;
-    if (g.current) g.current.position.set(0.6 + Math.sin(t) * 0.1, 1.75 + Math.sin(t * 2.3) * 0.08, Math.cos(t) * 0.1);
-    if (blade.current) blade.current.rotation.y += dt * 20;
-  });
-  return (
-    <group ref={g}>
-      <P color={color}><sphereGeometry args={[0.15, 14, 14]} /></P>
-      <Eyes z={0.13} gap={0.05} size={0.025} />
-      <P color="#eef1f7" position={[0, 0.17, 0]}><cylinderGeometry args={[0.015, 0.015, 0.1, 6]} /></P>
-      <mesh ref={blade} position={[0, 0.22, 0]}>
-        <boxGeometry args={[0.42, 0.015, 0.05]} />
-        <meshBasicMaterial color={INK} />
-      </mesh>
-    </group>
-  );
-}
-
-function Hooded({ cloak = "#8f84b3" }: { cloak?: string }) {
-  const bob = useBob(1.2, 0.04);
-  return (
-    <group ref={bob}>
-      <P color={cloak} position={[0, 0.5, 0]}><coneGeometry args={[0.42, 1.0, 16]} /></P>
-      <P color={cloak} position={[0, 1.12, 0]}><sphereGeometry args={[0.38, 18, 18]} /></P>
-      <mesh position={[0, 1.08, 0.24]} scale={[1, 0.9, 0.5]}>
-        <sphereGeometry args={[0.25, 16, 16]} />
-        <meshBasicMaterial color="#2f2840" />
-      </mesh>
-      {[-0.09, 0.09].map((x) => (
-        <mesh key={x} position={[x, 1.1, 0.375]}>
-          <circleGeometry args={[0.055, 14]} />
-          <meshBasicMaterial color="#ffffff" />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-/** A trader as they declared themselves; undeclared ones keep their hood up. */
-export function Trader({ kind, address, you, cloak }: { kind: number; address: string; you?: boolean; cloak?: string }) {
-  const color = hue(address.toLowerCase());
-  if (kind === 2) return <Robot color={color} />;
-  if (kind === 1) return <Human color={color} />;
-  if (kind === 3) return (<group><Human color={color} /><Drone color={color} /></group>);
-  return <Hooded cloak={you ? "#4cc3d9" : cloak} />;
-}
-
 // ---------- places ----------
 function hover(on: boolean) {
   document.body.style.cursor = on ? "pointer" : "auto";
@@ -516,7 +415,7 @@ function Stall({ shop, slot, open }: { shop: WorldShop; slot: (typeof SLOTS)[num
         </group>
       ))}
       <group position={[0, 0, -0.2]}>
-        <Trader kind={shop.kind} address={shop.owner} />
+        <Trader kind={shop.kind} address={shop.owner} apron />
       </group>
       <Html position={[0, 3.25, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className="w-sign" style={{ borderTopColor: color }}>
@@ -630,8 +529,9 @@ function ResidentFigure({ r, open }: { r: Resident; open: () => void }) {
   });
   return (
     <group ref={g} {...clickable(open)}>
+      <BlobShadow />
       <group ref={body}>
-        <Trader kind={r.kind} address={r.address} />
+        <Trader kind={r.kind} address={r.address} apron={r.id === "bolt"} mood={moodOf(r.id)} />
       </group>
       <Html position={[0, 2.25, 0]} center distanceFactor={12} zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
         {bubble ? <div className="w-say"><small>{r.name}</small>{bubble.text}</div> : <div className="w-name">{r.name}</div>}
@@ -672,8 +572,9 @@ function PeerFigure({ id }: { id: string }) {
   if (!p) return null;
   return (
     <group ref={g}>
+      <BlobShadow />
       <group ref={body}>
-        <Trader kind={p.kind} address={p.seed} cloak={hue(p.seed)} />
+        <Trader kind={p.kind} address={p.seed} cloak={hue(p.seed)} mood={moodOf(`p:${id}`)} />
       </group>
       <Html position={[0, 2.25, 0]} center distanceFactor={12} zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
         {bubble ? <div className="w-say"><small>{p.name}</small>{bubble.text}</div> : <div className="w-name">{p.name}</div>}
@@ -819,7 +720,7 @@ function BotOrNotStage({ open }: { open: (t: Target) => void }) {
       ))}
       <P color="#ef476f" position={[0, 3.25, -0.6]}><boxGeometry args={[4.2, 0.6, 1.2]} /></P>
       <P color="#6c4f9c" position={[0, 2.0, -1.1]} line={0.02}><boxGeometry args={[3.5, 2.2, 0.1]} /></P>
-      <group position={[0, 0.95, -0.2]}>{live || d.soon ? <Hooded /> : null}</group>
+      <group position={[0, 0.95, -0.2]}>{live || d.soon ? <Trader kind={0} address={live?.trader ?? "0x5a6e"} /> : null}</group>
       <group ref={q} position={[0, 4.3, -0.6]}>
         <P color="#ffd166" position={[0, 0.2, 0]} rotation={[0, 0, -0.6]}><torusGeometry args={[0.28, 0.1, 10, 20, Math.PI * 1.4]} /></P>
         <P color="#ffd166" position={[0, -0.45, 0]}><sphereGeometry args={[0.1, 10, 10]} /></P>
@@ -985,6 +886,7 @@ function Bunting() {
 function Tree({ x, z, s, kind }: { x: number; z: number; s: number; kind: number }) {
   return (
     <group position={[x, 0, z]} scale={s}>
+      <BlobShadow r={1.3} y={0.03} />
       <P color={WOOD_DARK} position={[0, 0.7, 0]}><cylinderGeometry args={[0.18, 0.24, 1.4, 8]} /></P>
       {kind === 1 ? (
         <>
@@ -1280,10 +1182,11 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
     <group ref={g}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
         <circleGeometry args={[0.55, 32]} />
-        <meshBasicMaterial color={INK} transparent opacity={0.18} />
+        <meshBasicMaterial color={INK} transparent opacity={0.12} />
       </mesh>
+      <BlobShadow />
       <group ref={body}>
-        <Trader kind={d.myKind} address={d.me ?? "0x0"} you />
+        <Trader kind={d.myKind} address={d.me ?? "0x0"} you mood={moodOf("me")} />
       </group>
       <Html position={[0, 2.2, 0]} center distanceFactor={12} zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
         {bubble ? <div className="w-say me">{bubble.text}</div> : <div className="w-me">You · {name}</div>}
@@ -1316,6 +1219,7 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
       { ...LANDMARK.gate, r: 0.6, name: "Projects gate", target: { kind: "tab", tab: "projects" } },
     );
     for (const t of TREES) out.push({ x: t.x, z: t.z, r: 0.45 * t.s, name: "", target: null });
+    for (const p of PROPS) out.push({ x: p.x, z: p.z, r: p.kind === "bush" ? 0.5 * (p.s ?? 1) : 0.35, name: "", target: null });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d]);
@@ -1329,6 +1233,7 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
       <Ground />
       <Bunting />
       {TREES.map((t, i) => <Tree key={i} {...t} />)}
+      <Props list={PROPS} />
       <Cloud x={-20} y={16} z={-40} s={1.6} />
       <Cloud x={14} y={19} z={-48} s={2} />
       <Cloud x={34} y={14} z={-30} s={1.3} />
