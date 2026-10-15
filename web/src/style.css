@@ -195,3 +195,14 @@ a.fun-link { display: inline-block; padding: 2px 10px; text-decoration: none; }
 .w-tour button { padding: 4px 12px; font-size: 14px; }
 @media (max-width: 640px) { .w-tour { bottom: 156px; font-size: 13px; } }
 #music { padding: 4px 9px; font-size: 16px; line-height: 1; flex: none; }
+
+/* sharing a design, sponsored free gas */
+.spot { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 0 0 14px; padding: 12px; background: var(--paper); color: var(--ink); border: 2.5px solid var(--ink); border-radius: 14px; }
+.spot h3 { margin: 0 0 2px; }
+.spot .muted { color: #6b5f6e; }
+.spot .thumb canvas { display: block; border: 2px solid var(--ink); border-radius: 6px; image-rendering: pixelated; }
+.spot-new { margin: 0 0 6px; font-weight: 700; }
+.spot-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 0; }
+.spot-act button.ghost { color: var(--ink); border-color: var(--ink); }
+figure button.share { padding: 2px 8px; margin-left: 4px; }
+#wallet .free-gas { margin: 8px 0; padding: 8px 10px; background: #e3f7e8; color: #1f3d2a; border: 2px solid #2d6a3e; border-radius: 10px; font-size: 13px; }

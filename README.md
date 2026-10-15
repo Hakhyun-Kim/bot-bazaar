@@ -244,6 +244,14 @@ A free creative module that works on its own and is the smallest useful mainnet 
 - Every collector can show one owned design on their profile (`setProfileDesign`), which any app
   can read with `profileDesignOf`.
 - The gallery is a paged read (`designsPage`), newest first.
+- Every design has a share link (`?design=<id>`) that opens the market with that design up front,
+  ready to collect or to draw your own. A drawing in progress is kept in the browser until published.
+
+### Sponsored free play
+
+A new browser wallet can get its first gas from a sponsor's tank (`contracts/GasTank.sol`, one
+fixed drip per wallet, a daily cap, all on-chain) through a small relayer (`sponsor/`). It runs on
+the local chain and on testnet; mainnet waits for a sponsor. See [docs/FREE-PLAY.md](docs/FREE-PLAY.md).
 
 ## Trust model
 

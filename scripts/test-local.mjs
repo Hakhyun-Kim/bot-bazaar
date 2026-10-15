@@ -1,8 +1,10 @@
 // End-to-end on a local anvil (chain id 677, paris hardfork): deploy all seven contracts and walk
 // every path a buyer, seller, project owner, agent and creator can take. Gas-free, a few seconds.
 import { parseEther, zeroAddress } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { compileAll } from "./lib/compile.mjs";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { SPONSOR, compileAll } from "./lib/compile.mjs";
+import { claimMessage } from "../sponsor/relayer.mjs";
+import { serve } from "../sponsor/serve.mjs";
 import { ANVIL_KEYS, ANVIL_MISSING, deployAll, deployOne, startChain } from "./lib/localchain.mjs";
 
 const node = await startChain();
@@ -397,6 +399,73 @@ await check("request rewards above the cap are refused", async () => {
   await creverts(buyer, "BazaarRequests", "post", ["Big job", "", 0, due], CAP + 1n, "cap");
   await cwrite(buyer, "BazaarRequests", "post", ["Small job", "", 0, due], CAP);
 });
+
+console.log("\nsponsored free play (gas tank + relayer)");
+{
+  const tankArt = compileAll(SPONSOR).GasTank;
+  const DRIP = parseEther("0.01");
+  const relayKey = generatePrivateKey();
+  const relay = node.wallet(relayKey);
+  await deployer.sendTransaction({ to: relay.account.address, value: parseEther("1") });
+  const hash = await deployer.deployContract({ abi: tankArt.abi, bytecode: tankArt.bytecode, args: [addr(deployer), relay.account.address, DRIP, DRIP * 3n] });
+  const tankAddr = (await node.pub.waitForTransactionReceipt({ hash })).contractAddress;
+  const tank = { address: tankAddr, abi: tankArt.abi };
+  const tread = (functionName, args = []) => node.pub.readContract({ ...tank, functionName, args });
+  await deployer.sendTransaction({ to: tankAddr, value: parseEther("1") });
+  const server = await serve({ SPONSOR_KEY: relayKey, RPC_URL: node.rpc, TANK: tankAddr }, 8790);
+  const claim = async (key, sigKey = key) => {
+    const who = privateKeyToAccount(key).address;
+    const signature = await privateKeyToAccount(sigKey).signMessage({ message: claimMessage(677, who) });
+    const r = await fetch("http://127.0.0.1:8790/drip", { method: "POST", body: JSON.stringify({ address: who, signature }) });
+    return { status: r.status, body: await r.json() };
+  };
+  const player = generatePrivateKey();
+  await check("an empty browser wallet gets free gas and publishes a design with it", async () => {
+    const r = await claim(player);
+    eq(r.status, 200, `drip ${JSON.stringify(r.body)}`);
+    eq(await node.pub.getBalance({ address: privateKeyToAccount(player).address }), DRIP, "dripped");
+    await write(node.wallet(player), "PixelWorkshop", "register", ["Free gas robot", "0x0ff03c3c3ffc0ff00c300ff03c3c0000", 0x0189, 0n]);
+    eq(await tread("dripCount"), 1n, "count");
+    eq(await tread("totalFunded"), parseEther("1"), "funded");
+  });
+  await check("one drip per wallet; a wrong signature or a funded wallet is refused", async () => {
+    eq((await claim(player)).body.reason, "already");
+    eq((await claim(generatePrivateKey(), generatePrivateKey())).status, 400, "signature");
+    eq((await claim(ANVIL_KEYS[3])).body.reason, "has-gas");
+  });
+  await check("the daily cap stops drips until the next day", async () => {
+    eq((await claim(generatePrivateKey())).status, 200);
+    eq((await claim(generatePrivateKey())).status, 200);
+    eq((await claim(generatePrivateKey())).body.reason, "daily-cap");
+    await node.increaseTime(DAY);
+    eq((await claim(generatePrivateKey())).status, 200, "next day");
+  });
+  await check("only the relayer drips; only the owner pauses or takes the rest back", async () => {
+    const fresh = privateKeyToAccount(generatePrivateKey()).address;
+    const tryCall = async (w, functionName, args) => {
+      try {
+        await node.pub.simulateContract({ ...tank, functionName, args, account: w.account });
+      } catch {
+        return;
+      }
+      throw new Error(`${functionName} by ${addr(w)} should revert`);
+    };
+    await tryCall(other, "drip", [fresh]);
+    await tryCall(other, "setRelayer", [addr(other)]);
+    await tryCall(other, "withdraw", [1n]);
+    const h1 = await deployer.writeContract({ ...tank, functionName: "setRelayer", args: [zeroAddress] });
+    await node.pub.waitForTransactionReceipt({ hash: h1 });
+    await tryCall(relay, "drip", [fresh]);
+    const left = await node.pub.getBalance({ address: tankAddr });
+    const h2 = await deployer.writeContract({ ...tank, functionName: "withdraw", args: [left] });
+    await node.pub.waitForTransactionReceipt({ hash: h2 });
+    eq(await node.pub.getBalance({ address: tankAddr }), 0n, "emptied");
+    const s = await (await fetch("http://127.0.0.1:8790/status")).json();
+    eq(s.open, false, "status closed");
+    eq(s.dripCount, 4, "status count");
+  });
+  server.close();
+}
 
 node.stop();
 console.log(`\n${passed} passed, ${failures.length} failed`);

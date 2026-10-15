@@ -1,0 +1,38 @@
+name: sponsor-testnet
+# Sponsored free play on BOT Chain testnet (968): deploys a GasTank, runs the free-gas relayer in the
+# job, and has a brand new empty wallet claim gas and publish a design (scripts/sponsor-run.mjs).
+# Commits docs/free-play-testnet-run.md. Testnet only. Unchecked = dry run (balance and plan).
+on:
+  workflow_dispatch:
+    inputs:
+      broadcast:
+        description: "Send the transactions (unchecked = dry run)"
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: deploy-testnet
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Free play, end to end
+        env:
+          DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+        run: node scripts/sponsor-run.mjs ${{ inputs.broadcast && '--yes' || '' }}
+      - name: Commit the run record
+        if: inputs.broadcast
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/free-play-testnet-run.md
+          git commit -m "Record the sponsored free play testnet run" -m "From the sponsor-testnet workflow, run ${GITHUB_RUN_ID}."
+          git pull --rebase origin main
+          git push origin HEAD:main

@@ -72,3 +72,10 @@ test("today's errand is one per day, stamps once, and only for that errand", asy
   assert.deepEqual(done, { day, done: true, stamps: 3 });
   assert.equal(completeErrand(today, done), null, "no second stamp the same day");
 });
+
+test("the page and the free-gas relayer sign the same message", async () => {
+  const web = await import("../web/src/sponsor.ts");
+  const relayer = await import("../sponsor/relayer.mjs");
+  const a = "0x7cfD8d742C58D9e43A5AA20E8A786A2D193655B3";
+  assert.equal(web.claimMessage(677, a), relayer.claimMessage(677, a.toLowerCase()));
+});

@@ -18,6 +18,9 @@ export const CONTRACTS = [
   "BotOrNot",
   "PixelWorkshop",
 ];
+/** The sponsor's gas tank is not one of the shared contracts: compiled on its own, so the seven
+ *  keep their verified standard input byte for byte. */
+export const SPONSOR = ["GasTank"];
 
 export const SETTINGS = {
   evmVersion: "paris",

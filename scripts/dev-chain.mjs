@@ -5,8 +5,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseEther } from "viem";
-import { ROOT, compileAll } from "./lib/compile.mjs";
+import { ROOT, SPONSOR, compileAll } from "./lib/compile.mjs";
 import { ANVIL_KEYS, ANVIL_MISSING, deployAll, startChain } from "./lib/localchain.mjs";
+import { serve } from "../sponsor/serve.mjs";
 
 const node = await startChain({ port: 8545, chainId: 31337 });
 if (!node) {
@@ -47,8 +48,20 @@ await send(b, "BotOrNot", "guess", [c.account.address, true]);
 await send(a, "PixelWorkshop", "register", ["Tile", "0x55555555aaaaaaaaffffffff00000000", 0x0135, 0n]);
 await send(b, "PixelWorkshop", "register", ["Robot", "0x0ff03c3c3ffc0ff00c300ff03c3c0000", 0x0189, 0n]);
 
+// Sponsored free play: a gas tank (0.01 BOT once per new wallet, 1 BOT a day) and its relayer on
+// :8787, so the page's browser wallet can start empty and still publish. Relayer = anvil key 3.
+const tankArt = compileAll(SPONSOR).GasTank;
+const tankTx = await deployer.deployContract({
+  abi: tankArt.abi, bytecode: tankArt.bytecode, args: [deployer.account.address, node.wallet(ANVIL_KEYS[3]).account.address, parseEther("0.01"), parseEther("1")],
+});
+const tank = (await node.pub.waitForTransactionReceipt({ hash: tankTx })).contractAddress;
+await node.pub.waitForTransactionReceipt({ hash: await deployer.sendTransaction({ to: tank, value: parseEther("5") }) });
+await serve({ SPONSOR_KEY: ANVIL_KEYS[3], RPC_URL: node.rpc, TANK: tank }, 8787);
+console.log(`GasTank         ${tank} · free-gas relayer http://127.0.0.1:8787`);
+
 const file = path.join(ROOT, "deployments", "31337.json");
 fs.mkdirSync(path.dirname(file), { recursive: true });
-fs.writeFileSync(file, JSON.stringify({ chainId: 31337, network: "local", contracts }, null, 2) + "\n");
+const sponsor = { url: "http://127.0.0.1:8787", tank };
+fs.writeFileSync(file, JSON.stringify({ chainId: 31337, network: "local", contracts, sponsor }, null, 2) + "\n");
 console.log(`\nwrote ${path.relative(ROOT, file)} · RPC ${node.rpc} · Ctrl+C to stop`);
 setInterval(() => {}, 1 << 30);

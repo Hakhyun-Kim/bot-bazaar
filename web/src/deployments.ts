@@ -5,6 +5,8 @@ export interface Deployment {
   chainId: number;
   /** Mainnet test version: most BOT (wei, decimal string) one purchase, offer or request may carry. */
   maxAmount?: string;
+  /** Sponsored free play: the free-gas relayer (sponsor/relayer.mjs) in front of a GasTank. */
+  sponsor?: { url: string; tank: Address };
   contracts: Partial<Record<"BazaarMarket" | "BazaarOffers" | "BazaarRequests" | "BazaarProjects" | "AgentPass" | "BotOrNot" | "PixelWorkshop", { address: Address }>>;
 }
 

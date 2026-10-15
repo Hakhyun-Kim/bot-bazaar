@@ -9,6 +9,8 @@ import {
   http,
   isAddress,
   parseEther,
+  parseEventLogs,
+  type Log,
   type Address,
   type Chain,
   type PublicClient,
@@ -25,6 +27,7 @@ import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
 import { PRACTICE, nextPractice } from "./world/errands";
 import { finishTour, tour } from "./world/tour";
 import { setupMusic } from "./music";
+import { claimFreeGas, claimMessage, sponsorStatus, type SponsorStatus } from "./sponsor";
 import "./style.css";
 
 type Name = keyof Deployment["contracts"];
@@ -142,10 +145,15 @@ function queueTx(label: string, name: Name, functionName: string, args: unknown[
     }
     // Mainnet starts in a browser wallet with nothing in it: the first write that needs gas opens
     // the wallet panel on how to fund it (deposit, send from MetaMask, or switch to MetaMask).
-    if (burner && networkKey === "mainnet") {
-      const have = await pub.getBalance({ address: me });
+    if (burner && (networkKey === "mainnet" || dep?.sponsor)) {
+      const need = parseEther(PUBLISH_GAS) + (value ?? 0n);
+      let have = await pub.getBalance({ address: me });
+      // Sponsored free play: an empty browser wallet asks for its first gas once, then carries on.
+      if (have < need && have === 0n && dep?.sponsor && !store.get(freeGasKey())) {
+        if (await getFreeGas()) have = await pub.getBalance({ address: me });
+      }
       balance = have;
-      if (have < parseEther(PUBLISH_GAS) + (value ?? 0n)) {
+      if (have < need) {
         needFunds = label;
         $("#wallet").hidden = false;
         renderWallet();
@@ -160,7 +168,7 @@ function queueTx(label: string, name: Name, functionName: string, args: unknown[
     toast(`${label}: sent, waiting for the block…`);
     const r = await pub.waitForTransactionReceipt({ hash });
     if (r.status !== "success") throw new Error(`${label} reverted`);
-    toast(`${label}: done`);
+    scanToast(`${label}: done.`, hash);
     world?.pulse();
     return r;
   };
@@ -183,13 +191,27 @@ function busy<T>(btn: EventTarget | null | undefined, p: Promise<T>): Promise<T>
   return p.finally(() => (btn.disabled = false));
 }
 
-function toast(msg: string, error = false) {
+function toast(msg: string, error = false, link?: { href: string; label: string }) {
   const t = document.createElement("div");
   t.className = `toast${error ? " error" : ""}`;
   t.textContent = msg;
+  if (link) {
+    const a = Object.assign(document.createElement("a"), { href: link.href, target: "_blank", rel: "noopener", textContent: link.label });
+    t.append(" ", a);
+  }
   document.body.append(t);
-  setTimeout(() => t.remove(), 5000);
+  setTimeout(() => t.remove(), link ? 9000 : 5000);
 }
+
+/** A page on BOTScan (null on the demo and local chains, which have no explorer). */
+function scan(kind: "tx" | "address", v: string) {
+  const url = networkKey === "demo" ? undefined : chain().blockExplorers?.default.url;
+  return url ? `${url}/${kind}/${v}` : null;
+}
+const scanToast = (msg: string, hash: string) => {
+  const href = scan("tx", hash);
+  toast(msg, false, href ? { href, label: "View on BOTScan ↗" } : undefined);
+};
 
 /** MetaMask's universal link: opens this page (network included) in the MetaMask app's browser. */
 const metamaskLink = () => `https://metamask.app.link/dapp/${location.host}${location.pathname}?network=${networkKey === "demo" ? "mainnet" : networkKey}`;
@@ -403,6 +425,36 @@ function useBurner() {
   burner = true;
 }
 
+// ---------- sponsored free play ----------
+// Where a deployment names a sponsor (deployments/<id>.json "sponsor"), a new browser wallet gets
+// its first gas once from the sponsor's gas tank (contracts/GasTank.sol) through its relayer.
+let sponsor: SponsorStatus | null = null;
+const freeGasKey = () => `bazaar-freegas-${chain().id}-${me}`;
+async function loadSponsor() {
+  sponsor = dep?.sponsor && networkKey !== "demo" ? await sponsorStatus(dep.sponsor.url) : null;
+  renderWallet();
+}
+const canClaim = () => !!(dep?.sponsor && burner && sponsor?.open && !store.get(freeGasKey()));
+
+/** Sign the claim with the browser wallet (no prompt: the key is in this page) and wait for the drip. */
+async function getFreeGas(): Promise<boolean> {
+  if (!dep?.sponsor || !walletClient?.account || !me) return false;
+  try {
+    toast("🎁 Getting your free gas…");
+    const signature = await walletClient.signMessage({ account: walletClient.account, message: claimMessage(chain().id, me) });
+    const hash = await claimFreeGas(dep.sponsor.url, me, signature);
+    store.set(freeGasKey(), hash);
+    await pub.waitForTransactionReceipt({ hash: hash as `0x${string}` });
+    scanToast("🎁 Free gas arrived. It is on the sponsor, for your first designs.", hash);
+    void loadSponsor();
+    void refreshBalance();
+    return true;
+  } catch (e) {
+    toast(`Free gas: ${(e as Error).message}`, true);
+    return false;
+  }
+}
+
 /** The faucet has a captcha, so "get BOT" copies the address and opens the faucet page for one paste. */
 async function getTestBot() {
   if (!me) return;
@@ -492,13 +544,18 @@ function renderWallet() {
   const box = $("#wallet");
   if (box.hidden || !me) return;
   const real = networkKey === "mainnet";
-  const fund = burner && real && needFunds && (balance === null || balance < parseEther(PUBLISH_GAS)) ? needFunds : null;
+  const fund = burner && (real || dep?.sponsor) && needFunds && (balance === null || balance < parseEther(PUBLISH_GAS)) ? needFunds : null;
+  const free = canClaim() && sponsor
+    ? `<p class="free-gas">🎁 <b>Free to start:</b> new wallets get ${Number(formatEther(BigInt(sponsor.dripAmount)))} BOT of gas once, on the sponsor
+        (${sponsor.dripCount} player${sponsor.dripCount === 1 ? "" : "s"} so far). <button class="fun" data-w="free">Get free gas</button></p>`
+    : "";
   box.innerHTML = `
     ${fund ? `<p class="need-funds"><b>To ${esc(fund.toLowerCase())}, add a little BOT first.</b> This wallet was made in your browser and is still empty.
       Gas for one design is about ${PUBLISH_GAS} BOT: deposit to the address below, send some from MetaMask, or use MetaMask instead.</p>` : ""}
     <h3>${burner ? "Browser wallet" : "Extension wallet"} <small class="muted">${esc(chain().name)}</small></h3>
     <p class="addr"><code>${me}</code> <button class="ghost" data-w="copy">Copy</button></p>
     <p>Balance <b>${balance === null ? "…" : bot(balance)}</b>${low ? ` <span class="warn">low</span>` : ""}</p>
+    ${burner && balance === 0n ? free : ""}
     ${networkKey === "testnet" ? `<p><button data-w="faucet">Get test BOT</button> <span class="muted">copies your address and opens the faucet</span></p>` : ""}
     ${burner && real ? `
       <div class="deposit">
@@ -530,6 +587,7 @@ function renderWallet() {
       const w = b.dataset.w;
       if (w === "copy") await navigator.clipboard.writeText(me!).then(() => toast("Address copied"), () => toast(me!));
       if (w === "faucet") await getTestBot();
+      if (w === "free") await busy(b, getFreeGas());
       if (w === "fund") await fundFromExtension();
       if (w === "reveal" && confirm(real
         ? "Show this wallet's private key? Anyone who sees it can take its BOT. Save it somewhere private (a password manager), never in a chat or screenshot."
@@ -680,6 +738,53 @@ async function viewProjects(el: HTMLElement) {
   });
 }
 
+// ---------- sharing a design ----------
+// ?design=<id> opens the market with that design up front in the workshop, so a shared link lands a
+// friend one tap from collecting it or drawing their own.
+const linkedDesign = new URLSearchParams(location.search).get("design");
+let spotlight: number | null = linkedDesign && /^\d+$/.test(linkedDesign) ? Number(linkedDesign) : null;
+let justPublished = false;
+const designLink = (id: number) =>
+  `${location.origin}${location.pathname}?${networkKey === "mainnet" ? "" : `network=${networkKey}&`}design=${id}`;
+
+/** The drawing in progress survives a reload or a detour to fund the wallet. Cleared once published. */
+const DRAFT = "bazaar-draft-v1";
+interface Draft { cells: number[]; slots: number[]; name: string }
+function loadDraft(): Draft | null {
+  try {
+    const d = JSON.parse(store.get(DRAFT) || "null") as Draft | null;
+    return d && d.cells?.length === 64 && d.slots?.length === 4 ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+async function spotlightCard(id: number) {
+  type D = { creator: Address; name: string; mints: number; price: bigint; pixels: string; palette: number };
+  const d = await read<D>("PixelWorkshop", "designAt", [BigInt(id)]).catch(() => null);
+  if (!d) return "";
+  const who = scan("address", d.creator);
+  const url = designLink(id);
+  const text = `I drew "${d.name}" as 8x8 pixel art, stored on BOT Chain. Collect it free or draw your own in BOT Bazaar`;
+  const sharing = networkKey !== "demo";
+  return `<section class="spot" data-spot="${id}">
+    <div class="thumb" data-pix="${d.pixels}:${d.palette}" data-scale="18"></div>
+    <div>
+      ${justPublished ? `<p class="spot-new">🎉 Published on ${esc(chain().name)}! Share it so friends can collect it.</p>` : ""}
+      <h3>${esc(d.name)}</h3>
+      <p class="muted">by ${who ? `<a href="${who}" target="_blank" rel="noopener">${short(d.creator)}</a>` : short(d.creator)}
+        · ${d.mints} collected · design #${id}</p>
+      <p class="spot-act">
+        ${me && d.creator === me ? "" : `<button class="fun" data-collect="${id}:${d.price}">${d.price ? bot(d.price) : "Collect free"}</button>`}
+        ${sharing ? `${"share" in navigator ? `<button class="ghost" data-native>Share…</button>` : ""}
+        <a class="fun-link" href="https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}" target="_blank" rel="noopener">Post on X</a>
+        <button class="ghost" data-copylink>Copy link</button>` : ""}
+        <button class="ghost" data-draw>Draw your own ↓</button>
+      </p>
+    </div>
+  </section>`;
+}
+
 async function viewWorkshop(el: HTMLElement) {
   const [ids, list] = await read<[bigint[], { creator: Address; name: string; price: bigint; mints: number; pixels: string; palette: number }[]]>(
     "PixelWorkshop", "designsPage", [0n, 48n]);
@@ -687,16 +792,19 @@ async function viewWorkshop(el: HTMLElement) {
   const freeOnly = await read<boolean>("PixelWorkshop", "freeOnly").catch(() => false);
   // Scoped to this view: the 3D easel panel and the Workshop tab can both hold a copy.
   const q = <T extends HTMLElement>(s: string) => el.querySelector(s) as T;
-  const cells = new Array<number>(64).fill(0);
+  const draft = loadDraft();
+  const cells = draft ? [...draft.cells] : new Array<number>(64).fill(0);
   let brush = 1;
-  const slots = [0, 1, 5, 3];
+  const slots = draft ? [...draft.slots] : [0, 1, 5, 3];
+  const spot = spotlight !== null ? await spotlightCard(spotlight) : "";
   el.innerHTML = `
+    ${spot}
     <h2>Pixel workshop <small>free on-chain designs · gallery</small></h2>
     <section class="editor">
       <div id="canvas" class="pixels"></div>
       <div>
         <div id="slots"></div>
-        <form id="design"><input name="name" placeholder="Design name" maxlength="36" required />
+        <form id="design"><input name="name" placeholder="Design name" maxlength="36" required value="${esc(draft?.name ?? "")}" />
           ${freeOnly ? "" : `<input name="price" placeholder="Price in BOT (0 = free)" value="0" />`}
           <button>Publish on-chain</button></form>
       </div>
@@ -706,15 +814,18 @@ async function viewWorkshop(el: HTMLElement) {
       .map(
         (id, i) => `<figure data-id="${id}"><div class="thumb" data-pix="${list[i].pixels}:${list[i].palette}"></div>
           <figcaption>${esc(list[i].name)}<br><small>${short(list[i].creator)} · ${list[i].mints} collected</small>
-          <button data-collect="${id}:${list[i].price}">${list[i].price ? bot(list[i].price) : "Collect free"}</button></figcaption></figure>`,
+          <button data-collect="${id}:${list[i].price}">${list[i].price ? bot(list[i].price) : "Collect free"}</button>
+          ${networkKey === "demo" ? "" : `<button class="ghost share" data-show="${id}" title="Share this design">🔗</button>`}</figcaption></figure>`,
       )
       .join("") || "<p>No designs yet — draw the first.</p>"}</div>`;
   el.querySelectorAll<HTMLElement>("[data-pix]").forEach((t) => {
     const [px, pal] = t.dataset.pix!.split(":");
-    t.append(patternCanvas(px, Number(pal), 10));
+    t.append(patternCanvas(px, Number(pal), Number(t.dataset.scale) || 10));
   });
   const grid = q("#canvas");
+  const keep = () => store.set(DRAFT, JSON.stringify({ cells, slots, name: q<HTMLInputElement>("#design [name=name]").value }));
   const paint = () => {
+    keep();
     grid.innerHTML = cells.map((v, i) => `<i data-i="${i}" style="background:${PRESET16[slots[v]]}"></i>`).join("");
     q("#slots").innerHTML = slots
       .map((p, s) => `<button class="swatch${s === brush ? " on" : ""}" data-slot="${s}" style="background:${PRESET16[p]}" title="Slot ${s}: click to paint, right-click to change colour"></button>`)
@@ -738,13 +849,35 @@ async function viewWorkshop(el: HTMLElement) {
     slots[Number(s)] = (slots[Number(s)] % 15) + 1;
     paint();
   });
+  q("#design [name=name]").addEventListener("input", keep);
   q("#design").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
     void busy((e as SubmitEvent).submitter, queueTx("Publish design", "PixelWorkshop", "register", [
       f.get("name"), encodePixels(cells), encodePalette(slots), parseEther(String(f.get("price") || "0")),
-    ])).then(render);
+    ])).then((r) => {
+      // The new design goes up front with its share buttons, and the canvas starts clean.
+      const ev = parseEventLogs({ abi: ABI.PixelWorkshop, logs: (r as { logs: Log[] }).logs, eventName: "DesignRegistered" } as never)[0] as unknown as { args: { id: bigint } } | undefined;
+      store.set(DRAFT, "");
+      if (ev) (spotlight = Number(ev.args.id)), (justPublished = true);
+      return render();
+    }, () => undefined);
   });
+  const spotEl = el.querySelector<HTMLElement>("[data-spot]");
+  if (spotEl) {
+    const id = Number(spotEl.dataset.spot);
+    spotEl.querySelector("[data-copylink]")?.addEventListener("click", () =>
+      navigator.clipboard.writeText(designLink(id)).then(() => toast("Link copied"), () => toast(designLink(id))));
+    spotEl.querySelector("[data-native]")?.addEventListener("click", () =>
+      void navigator.share({ title: "BOT Bazaar", text: `"${spotEl.querySelector("h3")!.textContent}" on BOT Chain`, url: designLink(id) }).catch(() => undefined));
+    spotEl.querySelector("[data-draw]")?.addEventListener("click", () => grid.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }
+  el.querySelectorAll<HTMLButtonElement>("[data-show]").forEach((b) =>
+    b.addEventListener("click", () => {
+      spotlight = Number(b.dataset.show);
+      justPublished = false;
+      void (panel ? renderPanel() : render()).then(() => el.querySelector("[data-spot]")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }));
   el.querySelectorAll<HTMLButtonElement>("[data-collect]").forEach((b) =>
     b.addEventListener("click", () => {
       const [id, price] = b.dataset.collect!.split(":");
@@ -1209,8 +1342,9 @@ async function viewBazaar() {
   world.update(d);
   // Where the workshop is all a network has (mainnet v1), it opens over the market on arrival so
   // drawing is one look away, as it was before the 3D market came first (harry, 2026-10-14).
-  // A first visit walks there instead, along the tour's dotted path (world/tour.ts).
-  if (!workshopShown && workshopOnly() && !panel && !tour.active) openPanel({ kind: "tab", tab: "workshop" });
+  // A first visit walks there instead, along the tour's dotted path (world/tour.ts). A shared design
+  // link (?design=<id>) opens the workshop with that design up front either way.
+  if (!workshopShown && !panel && (spotlight !== null || (workshopOnly() && !tour.active))) openPanel({ kind: "tab", tab: "workshop" });
   workshopShown = true;
   // The newest on-chain design rides on the workshop button, so pixel art shows from the first screen.
   const art = $("#to-workshop .w-cta-art");
@@ -1345,10 +1479,14 @@ async function selectNetwork(key: Key) {
   pub = createPublicClient({ chain: ch, transport: http() }) as PublicClient;
   dep = deploymentFor(ch.id);
   if (key === "testnet" && store.get("bazaar-wallet") !== "extension") useBurner();
+  // The local dev chain has a free-gas sponsor (npm run chain), so it starts like mainnet: an empty browser wallet.
+  if (key === "local" && dep?.sponsor && store.get("bazaar-wallet") !== "extension") useBurner();
   // Mainnet reopens the browser wallet only if the visitor chose it before (the key is already here).
   // Mainnet starts in the browser wallet too (harry, 2026-10-14), unless the visitor picked MetaMask.
   if (key === "mainnet" && store.get(MAINNET_WALLET) !== "extension") useBurner();
   if (burner) void refreshBalance();
+  sponsor = null;
+  void loadSponsor();
   renderWallet();
   void render();
 }
