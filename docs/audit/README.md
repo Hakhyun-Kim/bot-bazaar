@@ -10,6 +10,7 @@ Prepared 2026-10-14. This is an internal review and a static-analysis pass, not 
 | [static-analysis-raw.txt](static-analysis-raw.txt) | raw Slither output |
 | [internal-review.md](internal-review.md) | manual review of the money paths, findings, invariants |
 | [test-results.md](test-results.md) | latest `npm test` / `npm run test:local` / explorer bytecode check results |
+| [mainnet-core-flows.md](mainnet-core-flows.md) | one mainnet run of every core flow with transaction links (`scripts/core-flows.mjs`) |
 
 ## Scope
 

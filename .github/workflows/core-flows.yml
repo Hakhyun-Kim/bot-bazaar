@@ -1,0 +1,43 @@
+name: core-flows
+# Runs each core flow of the market modules once (scripts/core-flows.mjs) and commits the
+# transaction table to docs/audit/mainnet-core-flows.md. BOT Chain asked for these links
+# (2026-10-15); harry approved running them on mainnet. Unchecked = dry run (plan and budget only).
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: "mainnet or testnet"
+        type: choice
+        options: [mainnet, testnet]
+        default: mainnet
+      broadcast:
+        description: "Send the transactions (unchecked = dry run)"
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: deploy-mainnet
+jobs:
+  flows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run the core flows
+        env:
+          DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+        run: node scripts/core-flows.mjs --network ${{ inputs.network }} ${{ inputs.broadcast && '--yes' || '' }}
+      - name: Commit the transaction table
+        if: always() && inputs.broadcast && inputs.network == 'mainnet'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/audit/mainnet-core-flows.md
+          git commit -m "Record mainnet core-flow transactions" -m "From the core-flows workflow, run ${GITHUB_RUN_ID}."
+          git pull --rebase origin main
+          git push origin HEAD:main
