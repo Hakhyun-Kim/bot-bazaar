@@ -20,10 +20,17 @@ receipts and a buyer base without writing commerce contracts themselves.
 
 | | |
 |---|---|
-| Status | Mainnet: Pixel Workshop (free designs) since 2026-10-14. Testnet: the full bazaar. |
-| Play it | **[play.metah.dev](https://play.metah.dev/)** opens on mainnet; [testnet](https://play.metah.dev/?network=testnet) has the full bazaar, [demo](https://play.metah.dev/?network=demo) runs it inside your browser |
+| Status | Mainnet: all seven contracts since 2026-10-14. Pixel Workshop (free designs) is the full release; the market (six contracts) is an **unaudited test version 0.1** with a 0.001 BOT cap per action. Testnet: the full bazaar, uncapped. |
+| Play it | **[play.metah.dev](https://play.metah.dev/)** opens on mainnet; [testnet](https://play.metah.dev/?network=testnet) and [demo](https://play.metah.dev/?network=demo) (runs inside your browser) have the bazaar without a cap |
 | Chain | BOT Chain mainnet (chain id 677) and testnet (968), EVM |
 | License | MIT |
+
+> **Mainnet test version 0.1: not yet audited.** The six market contracts (BazaarMarket,
+> BazaarOffers, BazaarRequests, BazaarProjects, AgentPass, BotOrNot) run on mainnet as an unaudited
+> test version. Every purchase, listed price, offer and request reward is capped at **0.001 BOT per
+> action**. The cap is not a limit on total escrow: many capped actions can be open at once, so the
+> BOT held by the contracts can add up to more than 0.001. See
+> [Mainnet test version 0.1](#mainnet-test-version-01) for addresses and what happens if the cap changes.
 
 ---
 
@@ -41,10 +48,11 @@ receipts and a buyer base without writing commerce contracts themselves.
 10. [Trust model](#trust-model)
 11. [Networks](#networks)
 12. [Quick start](#quick-start)
-13. [Deploying](#deploying)
-14. [Repository layout](#repository-layout)
-15. [Roadmap](#roadmap)
-16. [FAQ](#faq)
+13. [Mainnet test version 0.1](#mainnet-test-version-01)
+14. [Deploying](#deploying)
+15. [Repository layout](#repository-layout)
+16. [Roadmap](#roadmap)
+17. [FAQ](#faq)
 
 Deeper notes: [docs/DESIGN.md](docs/DESIGN.md) (data model, invariants, decisions) and
 [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) (how the project fits the BOT Chain ecosystem).
@@ -280,14 +288,16 @@ Requires Node.js 20 or newer.
 npm ci
 npm test                                         # pure checks, no chain, under a second
 npm i @foundry-rs/anvil --ignore-scripts --no-save
-npm run test:local                               # deploys everything on a local chain and walks 30 paths
+npm run test:local                               # deploys everything on a local chain and walks 39 paths
 ```
 
 `test:local` starts anvil with chain id 677 and the `paris` hardfork, deploys all seven contracts in
 production order, and checks escrow, dispute timing (by jumping the clock 2 and 8 days), refunds,
 listings, offers and expiry, badges, Agent Pass signatures and replay protection, Bot or Not
 (sealed answers, one vote each, reveal timing, claims, forfeits), requests (cancel, accept, dispute
-window, missed deadline, hand-back) and the workshop.
+window, missed deadline, hand-back) and the workshop. It then deploys the capped mainnet set and
+checks that listings, shop prices, purchases, offers and request rewards above the cap are refused.
+Latest run: [docs/audit/test-results.md](docs/audit/test-results.md).
 
 The web client opens on **Bazaar**, the market as a place ([`web/src/world/World.tsx`](web/src/world/World.tsx),
 three.js): a sunny cartoon market where every open shop is a striped-awning stall with its owner
@@ -315,6 +325,46 @@ Pick **Local dev chain** in the network menu, add `http://127.0.0.1:8545` (chain
 wallet, and import anvil's public development key
 `0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d` (it holds no real funds).
 
+## Mainnet test version 0.1
+
+Deployed 2026-10-14, all source-verified on BOTScan. Record: [`deployments/677.json`](deployments/677.json).
+
+| Contract | Address | Cap |
+|---|---|---|
+| PixelWorkshop (free-only) | [0x48b1…adbb](https://scan.botchain.ai/address/0x48b1c637f7fe9fec89961577329657344311adbb) | free designs only |
+| BazaarMarket | [0xa1de…57bf](https://scan.botchain.ai/address/0xa1de5cad2d48c9f78c5482e932e859dd740557bf) | 0.001 BOT per price and purchase |
+| BazaarOffers | [0xb3a0…e362](https://scan.botchain.ai/address/0xb3a0e015a51a703b3c041ca16852369c39d8e362) | 0.001 BOT per offer |
+| BazaarRequests | [0x172b…a7f0](https://scan.botchain.ai/address/0x172bb2be636440d35b56df4e684f751053bda7f0) | 0.001 BOT per request reward |
+| BazaarProjects | [0x65b6…ce18](https://scan.botchain.ai/address/0x65b6e104060bb471c4bbbcffc46b35daf659ce18) | holds no BOT |
+| AgentPass | [0x2b55…aadc](https://scan.botchain.ai/address/0x2b556b459dcd47c9e8617fa6003f4b9fdfe5aadc) | holds no BOT |
+| BotOrNot | [0x5fac…aaf1](https://scan.botchain.ai/address/0x5facef258b07b7790c9375b47840465e0b47aaf1) | holds no BOT |
+
+Some of these addresses equal testnet addresses of different contracts (same deployer, same
+nonces); always read the address with its chain id.
+
+**What the cap is.** `maxAmount` is a constructor argument of BazaarMarket, BazaarOffers and
+BazaarRequests, 0.001 BOT (10^15 wei) on mainnet. Each listed price, shop item price, purchase,
+offer and request reward above it reverts. It limits **each action**, not the total: the BOT held
+by the contracts is the sum of all open purchases, offers and rewards, which can exceed 0.001 BOT.
+The web client shows "Under construction · unaudited test version 0.1" on mainnet and refuses
+larger amounts before the wallet opens.
+
+**Changing the cap.** `maxAmount` is immutable and there is no admin key, so the cap cannot be
+changed in place. The current limits stay until the contracts have been reviewed and tested. A
+later release would:
+
+1. Deploy new BazaarMarket and BazaarOffers (wired to each other) and a new BazaarRequests with the
+   new cap, at **new addresses**, after review. BazaarProjects, AgentPass and BotOrNot hold no BOT
+   and are not linked to the cap, so they stay.
+2. Leave the 0.1 contracts running. Nobody can pause them or move their BOT, so every open item
+   finishes there under its own rules: purchases are confirmed, refunded by the seller, or released
+   after 24 hours (7 days if disputed); offers are accepted or returned to the buyer (by anyone
+   after 7 days); request rewards are paid, cancelled or reclaimed. Receipts stay on the 0.1 market.
+3. Keep the 0.1 addresses in the deployment record so the web client still shows open 0.1 items
+   with their settle, refund and cancel buttons, while new shops, offers and requests go to the new
+   contracts. Shops and listings do not move; sellers reopen them on the new market.
+4. Announce the new addresses with their deploy and verification links before the site switches.
+
 ## Deploying
 
 The deploy key is read from the environment only. It is never written to disk or printed.
@@ -323,6 +373,7 @@ The deploy key is read from the environment only. It is never written to disk or
 DEPLOYER_KEY=0x... npm run deploy -- --network testnet          # dry run: chain id, balance, sizes
 DEPLOYER_KEY=0x... npm run deploy -- --network testnet --yes    # broadcast seven deployments
 DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --only PixelWorkshop --yes   # first mainnet version
+DEPLOYER_KEY=0x... npm run deploy -- --network mainnet --add-market --max-amount 0.001 --yes   # market test version 0.1
 # add --reuse-testnet-key to deploy from a wallet that also deployed testnet (accepted risk)
 ```
 
@@ -330,11 +381,11 @@ The site opens on the 3D bazaar; the Pixel Workshop (draw, publish, gallery) ope
 the easel in the market or the next tab. Some things in the market need no contract, so they work on every network:
 gallery frames hang the on-chain designs on empty stalls, residents walk about and chat, five emotes (residents close by
 join in), one small errand a day with a stamp kept in the browser, and a Bot or Not practice round on mainnet
-(`web/src/world/errands.ts`). On mainnet the shops and parcel lockers show as coming soon.
+(`web/src/world/errands.ts`). On mainnet the shops, requests and parcel lockers run as the capped test version 0.1.
 On mainnet, visitors start in a browser wallet whose key is made and kept only in that browser (meant for a little BOT
 for gas, with a deposit address and QR code, key backup and download, and "Send BOT out"). The first publish without
 enough BOT opens the wallet panel on how to fund it: deposit, send from MetaMask, or switch to MetaMask.
-The first mainnet version is the Pixel Workshop alone (free designs and the gallery). `deploy.mjs` refuses a mainnet deploy from any wallet that deployed a
+The first mainnet version was the Pixel Workshop alone (free designs and the gallery); the market test version 0.1 followed the same day (deploy-mainnet-market workflow). `deploy.mjs` refuses a mainnet deploy from any wallet that deployed a
 testnet set, because that key also lives in a browser and a GitHub secret.
 
 Testnet can be deployed from the page itself, with no key outside your browser: pick BOT Chain
@@ -352,8 +403,10 @@ if `deployments/<chainId>.json` already exists (pass `--force` to deploy a fresh
 in a fixed order: `BazaarMarket` receives the address `BazaarOffers` will have (predicted from the
 next nonce), and the script stops if the prediction does not match.
 
-For explorer source verification, `npm run verify-input` writes the solc standard-JSON input
-(compiler v0.8.28, `paris`, optimizer 200) to `deployments/standard-input.json`.
+For explorer source verification, `npm run verify -- --network mainnet --submit` (or the
+**verify-explorer** workflow) checks each deployed contract's code against this checkout and submits
+the standard-JSON input to BOTScan. `npm run verify-input` writes that input (compiler v0.8.28,
+`paris`, optimizer 200) to `deployments/standard-input.json` for a manual upload.
 
 ## Repository layout
 
@@ -378,7 +431,8 @@ docs/                 DESIGN.md · ECOSYSTEM.md
 
 1. Testnet (968) deployment and a public web build pointing at it.
 2. Pixel Workshop on mainnet (677): creation and gallery only, gas only.
-3. Market, offers, requests, projects, Agent Pass and Bot or Not on mainnet.
+3. Market, offers, requests, projects, Agent Pass and Bot or Not on mainnet: test version 0.1 (capped, 2026-10-14);
+   after review, a release without the test cap at new addresses.
 4. Stablecoin payments (an ERC-20 path beside native BOT, same escrow rules).
 5. Agent toolkit: an SDK and MCP server so agents can open shops, answer offers within an
    owner-set floor and confirm deliveries.

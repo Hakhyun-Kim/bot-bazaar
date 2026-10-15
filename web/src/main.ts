@@ -1243,7 +1243,7 @@ async function render() {
     banner.textContent = workshopOnly()
       ? "BOT Chain mainnet · the Pixel Workshop and gallery are open (gas only, in real BOT). Shops and the parcel lockers are coming soon."
       : cap()
-        ? `🚧 Under construction · BOT Chain mainnet test version 0.1: shops, offers and requests take at most ${formatEther(cap())} BOT each while we test. Payments are real BOT.`
+        ? `🚧 Under construction · unaudited test version 0.1 on BOT Chain mainnet: each price, purchase, offer and request reward is capped at ${formatEther(cap())} BOT (per action, not a total limit). Payments are real BOT.`
         : "BOT Chain mainnet: payments are real BOT.";
   } else if (demo) {
     banner.innerHTML = `Demo<span class="long">: the real contracts on a chain inside this page. Play as anyone, nothing leaves your browser.</span> · Clock ${new Date(

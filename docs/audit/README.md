@@ -9,6 +9,7 @@ Prepared 2026-10-14. This is an internal review and a static-analysis pass, not 
 | [static-analysis.md](static-analysis.md) | Slither run (tool, version, commands) and triage of every detector hit |
 | [static-analysis-raw.txt](static-analysis-raw.txt) | raw Slither output |
 | [internal-review.md](internal-review.md) | manual review of the money paths, findings, invariants |
+| [test-results.md](test-results.md) | latest `npm test` / `npm run test:local` / explorer bytecode check results |
 
 ## Scope
 
@@ -17,12 +18,12 @@ is `scripts/lib/compile.mjs`; tests, deploy and explorer verification all use it
 
 | Contract | Lines | Holds BOT? | External calls | Mainnet status |
 |---|---:|---|---|---|
-| `contracts/BazaarMarket.sol` | 516 | **Yes**: escrowed purchases (24 h, 7 days if disputed) | `seller.call{value}` in `_settle`; `buyer.call{value}` in `refund`; `onERC1155Received` on the receiver in `safeTransferFrom` | to deploy (capped) |
-| `contracts/BazaarOffers.sol` | 126 | **Yes**: locked offers (up to 7 days) | `buyer.call{value}` in `cancelOffer`; `market.purchaseFor{value}` in `acceptOffer` | to deploy (capped) |
-| `contracts/BazaarRequests.sol` | 215 | **Yes**: request rewards (until paid / returned) | `worker.call{value}` in `_pay`; `poster.call{value}` in `_return` | to deploy (capped) |
-| `contracts/BazaarProjects.sol` | 110 | No | none | to deploy |
-| `contracts/AgentPass.sol` | 114 | No | `ecrecover` precompile | to deploy |
-| `contracts/BotOrNot.sol` | 175 | No (score only) | `AgentPass.kindOf` (view) | to deploy |
+| `contracts/BazaarMarket.sol` | 516 | **Yes**: escrowed purchases (24 h, 7 days if disputed) | `seller.call{value}` in `_settle`; `buyer.call{value}` in `refund`; `onERC1155Received` on the receiver in `safeTransferFrom` | deployed 2026-10-14, capped (test version 0.1) |
+| `contracts/BazaarOffers.sol` | 126 | **Yes**: locked offers (up to 7 days) | `buyer.call{value}` in `cancelOffer`; `market.purchaseFor{value}` in `acceptOffer` | deployed 2026-10-14, capped (test version 0.1) |
+| `contracts/BazaarRequests.sol` | 215 | **Yes**: request rewards (until paid / returned) | `worker.call{value}` in `_pay`; `poster.call{value}` in `_return` | deployed 2026-10-14, capped (test version 0.1) |
+| `contracts/BazaarProjects.sol` | 110 | No | none | deployed 2026-10-14 |
+| `contracts/AgentPass.sol` | 114 | No | `ecrecover` precompile | deployed 2026-10-14 |
+| `contracts/BotOrNot.sol` | 175 | No (score only) | `AgentPass.kindOf` (view) | deployed 2026-10-14 |
 | `contracts/PixelWorkshop.sol` | 117 | No on mainnet (`freeOnly = true`) | `creator.call{value}` only for priced designs, unreachable when `freeOnly` | already on mainnet, `0x48b1c637f7fe9fec89961577329657344311adbb` (chain 677) |
 
 No contract imports any library. There are no tokens other than the minimal ERC-1155 purchase
