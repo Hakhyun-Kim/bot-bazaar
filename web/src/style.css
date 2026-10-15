@@ -183,3 +183,13 @@ a.fun-link { display: inline-block; padding: 2px 10px; text-decoration: none; }
 @media (max-width: 640px) { #connect .bal { display: none; } #connect { white-space: nowrap; } }
 #wallet .need-funds { margin: 0 0 10px; padding: 8px 10px; background: #fff3c4; color: #3a2e3f; border: 2px solid #3a2e3f; border-radius: 10px; font-size: 13px; }
 #wallet { z-index: 40; }
+
+/* first-visit tour (world/tour.ts) */
+.w-tour { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); z-index: 26; width: min(420px, calc(100% - 24px));
+  display: flex; gap: 10px; align-items: center; color: #3a2e3f; background: #fffaf0; border: 2.5px solid #3a2e3f; border-radius: 14px;
+  box-shadow: 0 4px 0 #3a2e3f; padding: 8px 12px; font: 700 14px/1.35 ui-rounded, "Nunito", "Trebuchet MS", system-ui, sans-serif; animation: w-pop 0.4s ease-out; }
+.w-tour p { margin: 0; flex: 1; }
+.w-tour p b { display: block; font-size: 16px; font-weight: 900; }
+.w-tour div { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.w-tour button { padding: 4px 12px; font-size: 14px; }
+@media (max-width: 640px) { .w-tour { bottom: 156px; font-size: 13px; } }

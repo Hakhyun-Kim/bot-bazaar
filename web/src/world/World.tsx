@@ -13,6 +13,7 @@ import { Color, DataTexture, Group, InstancedMesh, Mesh, MeshBasicMaterial, Near
 import { PRESET16, decodePixels } from "../pixel";
 import { completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
 import { joinMarket, leaveMarket, myName, onPeerEmote, peers, peersVersion, setMyName, subscribePeers, tellEmote, tellPose } from "./peers";
+import { finishTour, subscribeTour, tour, walkTour } from "./tour";
 
 export type Tab = "requests" | "botornot" | "workshop" | "projects" | "account";
 export type Target = { kind: "shop"; owner: string } | { kind: "tab"; tab: Tab };
@@ -1024,6 +1025,7 @@ function Ground() {
         onClick={(e) => {
           e.stopPropagation();
           player.target = { x: e.point.x, z: e.point.z };
+          tour.walking = false;
         }}>
         <circleGeometry args={[WORLD_R + 40, 64]} />
         <meshToonMaterial color="#9ed97a" gradientMap={GRAD} />
@@ -1043,6 +1045,122 @@ function Ground() {
         </mesh>
       ))}
     </group>
+  );
+}
+
+// ---------- first-visit tour: a dotted path to the easel ----------
+/** Where the tour ends: on the west path, just in front of the easel. */
+const TOUR_END = { x: LANDMARK.wall.x + 2.7, z: LANDMARK.wall.z };
+/** From where the player stands round the open middle of the plaza (inside the stall rings, outside
+ *  the lockers), then down the west path to the easel. */
+function tourRoute(px: number, pz: number): [number, number][] {
+  const out: [number, number][] = [[px, pz]];
+  if (!(px < -8 && Math.abs(pz) < 3)) {
+    const R = 7;
+    const r0 = Math.hypot(px, pz);
+    const a0 = Math.atan2(px, -pz);
+    let da = -Math.PI / 2 - a0;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    const steps = Math.max(2, Math.ceil((Math.abs(da) * R + Math.abs(r0 - R)) / 1.2));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const a = a0 + da * t;
+      const r = r0 + (R - r0) * Math.min(1, t * 2.5);
+      out.push([Math.sin(a) * r, -Math.cos(a) * r]);
+    }
+  }
+  out.push([TOUR_END.x, TOUR_END.z]);
+  return out;
+}
+
+const useTour = () => useSyncExternalStore(subscribeTour, () => tour.active);
+const DOTS = 90;
+const DOT_GAP = 0.8;
+
+/** Marching dots on the ground from the player to the easel, a bouncing arrow over it and a ring
+ *  where to stand. Only while the first-visit tour runs. */
+function TourPath() {
+  const active = useTour();
+  const ink = useRef<InstancedMesh>(null);
+  const gold = useRef<InstancedMesh>(null);
+  const arrow = useRef<Group>(null);
+  const ring = useRef<Mesh>(null);
+  const dummy = useMemo(() => new Object3D(), []);
+  useFrame(({ clock }) => {
+    if (!ink.current || !gold.current) return;
+    const t = clock.elapsedTime;
+    const route = tourRoute(player.x, player.z);
+    let n = 0;
+    let carry = DOT_GAP - ((t * 1.6) % DOT_GAP); // dots march toward the easel
+    let walked = 0;
+    for (let i = 1; i < route.length && n < DOTS; i++) {
+      const [ax, az] = route[i - 1];
+      const [bx, bz] = route[i];
+      const len = Math.hypot(bx - ax, bz - az);
+      let at = carry;
+      while (at < len && n < DOTS) {
+        if (walked + at > 1) {
+          const k = at / len;
+          dummy.position.set(ax + (bx - ax) * k, 0.06, az + (bz - az) * k);
+          dummy.rotation.set(-Math.PI / 2, 0, 0);
+          dummy.scale.setScalar(1);
+          dummy.updateMatrix();
+          ink.current.setMatrixAt(n, dummy.matrix);
+          dummy.position.y = 0.07;
+          dummy.updateMatrix();
+          gold.current.setMatrixAt(n, dummy.matrix);
+          n++;
+        }
+        at += DOT_GAP;
+      }
+      carry = at - len;
+      walked += len;
+    }
+    ink.current.count = gold.current.count = n;
+    ink.current.instanceMatrix.needsUpdate = gold.current.instanceMatrix.needsUpdate = true;
+    if (arrow.current) (arrow.current.position.y = 6.3 + Math.abs(Math.sin(t * 3)) * 0.5), (arrow.current.rotation.y = t * 1.5);
+    if (ring.current) ring.current.scale.setScalar(1 + (t % 1.2) * 0.4), ((ring.current.material as MeshBasicMaterial).opacity = 0.9 - (t % 1.2) * 0.6);
+  });
+  if (!active) return null;
+  return (
+    <group>
+      <instancedMesh ref={ink} args={[undefined, undefined, DOTS]} frustumCulled={false}>
+        <circleGeometry args={[0.2, 16]} />
+        <meshBasicMaterial color={INK} />
+      </instancedMesh>
+      <instancedMesh ref={gold} args={[undefined, undefined, DOTS]} frustumCulled={false}>
+        <circleGeometry args={[0.14, 16]} />
+        <meshBasicMaterial color="#ffd166" />
+      </instancedMesh>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[TOUR_END.x, 0.05, TOUR_END.z]}>
+        <ringGeometry args={[0.9, 1.15, 40]} />
+        <meshBasicMaterial color="#ffd166" transparent />
+      </mesh>
+      <group ref={arrow} position={[LANDMARK.wall.x, 6.3, LANDMARK.wall.z]}>
+        <P color="#ffd166" rotation={[Math.PI, 0, 0]} line={0.05}><coneGeometry args={[0.55, 0.9, 4]} /></P>
+        <P color="#ffd166" position={[0, 0.75, 0]} line={0.05}><boxGeometry args={[0.35, 0.7, 0.35]} /></P>
+      </group>
+    </group>
+  );
+}
+
+/** The tour's card: what to do, walk me there, or skip. */
+function TourCard() {
+  const active = useTour();
+  const walking = useSyncExternalStore(subscribeTour, () => tour.walking);
+  if (!active) return null;
+  return (
+    <div className="w-tour" role="dialog" aria-label="Welcome">
+      <p>
+        <b>👋 Welcome to BOT Bazaar!</b>
+        {walking ? "Off to the easel… 🎨" : "Follow the yellow dots to the 🎨 easel and draw your first pixel art. It's free."}
+      </p>
+      <div>
+        {!walking && <button type="button" className="fun" onClick={walkTour}>Walk me there</button>}
+        <button type="button" className="ghost" onClick={finishTour}>Skip</button>
+      </div>
+    </div>
   );
 }
 
@@ -1076,6 +1194,7 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
         keys.current.add(e.code);
         player.target = null;
+        tour.walking = false;
         e.preventDefault();
       }
       const s = nearRef.current;
@@ -1098,6 +1217,16 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
     const k = keys.current;
     let dx = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
     let dz = (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0) - (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0);
+    if (tour.active && Math.hypot(TOUR_END.x - player.x, TOUR_END.z - player.z) < 1.6) {
+      // arrived at the easel: the workshop opens by itself, and the tour is over
+      player.target = null;
+      finishTour();
+      open({ kind: "tab", tab: "workshop" });
+    } else if (tour.walking && !dx && !dz) {
+      const route = tourRoute(player.x, player.z);
+      const next = route.find(([x, z]) => Math.hypot(x - player.x, z - player.z) > 1.2) ?? route[route.length - 1];
+      player.target = { x: next[0], z: next[1] };
+    }
     if (player.target && !dx && !dz) {
       const tx = player.target.x - player.x;
       const tz = player.target.z - player.z;
@@ -1216,6 +1345,7 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
       {shut.map((slot, i) => <SoonStall key={i} slot={slot} open={open} />)}
       {RESIDENTS.map((r) => <ResidentFigure key={r.id} r={r} open={() => talk(r)} />)}
       <People />
+      <TourPath />
       <Player spots={spots} setNear={setNear} open={open} />
     </>
   );
@@ -1235,6 +1365,7 @@ function Root({ open }: { open: (t: Target) => void }) {
         <Scene open={open} setNear={setNear} />
       </Canvas>
       <ErrandChip />
+      <TourCard />
       <Billboard open={open} />
       <div className="w-emotes" role="toolbar" aria-label="Emotes">
         {EMOTES.map((e) => (

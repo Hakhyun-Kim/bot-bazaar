@@ -23,6 +23,7 @@ import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
 import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
 import { PRACTICE, nextPractice } from "./world/errands";
+import { finishTour, tour } from "./world/tour";
 import "./style.css";
 
 type Name = keyof Deployment["contracts"];
@@ -1121,7 +1122,10 @@ setInterval(async () => {
 
 function openPanel(t: Target) {
   panel = t;
-  if (t.kind === "tab" && t.tab === "workshop") world?.errand("draw");
+  if (t.kind === "tab" && t.tab === "workshop") {
+    world?.errand("draw");
+    finishTour();
+  }
   void renderPanel();
 }
 
@@ -1204,7 +1208,8 @@ async function viewBazaar() {
   world.update(d);
   // Where the workshop is all a network has (mainnet v1), it opens over the market on arrival so
   // drawing is one look away, as it was before the 3D market came first (harry, 2026-10-14).
-  if (!workshopShown && workshopOnly() && !panel) openPanel({ kind: "tab", tab: "workshop" });
+  // A first visit walks there instead, along the tour's dotted path (world/tour.ts).
+  if (!workshopShown && workshopOnly() && !panel && !tour.active) openPanel({ kind: "tab", tab: "workshop" });
   workshopShown = true;
   // The newest on-chain design rides on the workshop button, so pixel art shows from the first screen.
   const art = $("#to-workshop .w-cta-art");
