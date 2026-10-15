@@ -297,7 +297,8 @@ listings, offers and expiry, badges, Agent Pass signatures and replay protection
 (sealed answers, one vote each, reveal timing, claims, forfeits), requests (cancel, accept, dispute
 window, missed deadline, hand-back) and the workshop. It then deploys the capped mainnet set and
 checks that listings, shop prices, purchases, offers and request rewards above the cap are refused.
-Latest run: [docs/audit/test-results.md](docs/audit/test-results.md).
+Latest run: [docs/audit/test-results.md](docs/audit/test-results.md). One mainnet run of every core flow,
+with transaction links: [docs/audit/mainnet-core-flows.md](docs/audit/mainnet-core-flows.md) (`scripts/core-flows.mjs`).
 
 The web client opens on **Bazaar**, the market as a place ([`web/src/world/World.tsx`](web/src/world/World.tsx),
 three.js): a sunny cartoon market where every open shop is a striped-awning stall with its owner
