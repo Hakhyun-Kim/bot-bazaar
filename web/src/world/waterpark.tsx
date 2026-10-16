@@ -1,7 +1,7 @@
 // The water park around the market (harry, 2026-10-15, after his Roblox Waterpark and GIWA Village's
 // sea): a sandy beach ring past the trees, a cartoon sea out to the horizon with foam and sparkles, a
-// smiling sun, two slide towers (a blue spiral and a yellow wiggle) splashing into a lagoon of swim
-// rings, palms, parasols, lifeguard chairs, a giant rubber duck, a buoy line, an island, a sailboat
+// bright sun, two slide towers (a blue spiral and a yellow wiggle) splashing into a lagoon of swim
+// rings, palms, parasols, lifeguard chairs, a swim platform, a buoy line, an island, a sailboat
 // and a hot-air balloon. All of it is scenery: nothing here is clickable or read from the chain.
 // How much is drawn follows scenery.ts (Light / Normal / Full); repeated things are instanced so a
 // phone pays a few draw calls for them.
@@ -123,57 +123,26 @@ function SkyAndSea({ lv }: { lv: Level }) {
   );
 }
 
-// ---------- the sun: big, round and smiling ----------
+// ---------- the sun: a plain bright disc with a soft glow (no face: the game is for adults) ----------
 const SUN_AT: V3 = [58, 30, -380];
-function Sun({ lv }: { lv: Level }) {
+function Sun() {
   const g = useRef<Group>(null);
-  const rays = useRef<Group>(null);
-  useFrame((st, dt) => {
-    if (g.current) g.current.lookAt(st.camera.position);
-    if (rays.current && lv > 0) rays.current.rotation.z += dt * 0.12;
-  });
-  const flat = { fog: false, toneMapped: false } as const;
+  useFrame((st) => g.current?.lookAt(st.camera.position));
+  const flat = { fog: false, toneMapped: false, transparent: true } as const;
   return (
     <group ref={g} position={SUN_AT}>
       <mesh position={[0, 0, -1]}>
-        <circleGeometry args={[30, 48]} />
-        <meshBasicMaterial color="#fff6c8" transparent opacity={0.55} {...flat} />
+        <circleGeometry args={[42, 48]} />
+        <meshBasicMaterial color="#fffbe6" opacity={0.25} {...flat} />
       </mesh>
-      <group ref={rays}>
-        {Array.from({ length: 12 }, (_, i) => (
-          <group key={i} rotation={[0, 0, (i / 12) * Math.PI * 2]} position={[0, 0, -0.5]}>
-            <mesh position={[0, 24, 0]} rotation={[0, 0, Math.PI / 2]}>
-              <circleGeometry args={[4.2, 3]} />
-              <meshBasicMaterial color={i % 2 ? "#ffc43d" : "#ffd75e"} {...flat} />
-            </mesh>
-          </group>
-        ))}
-      </group>
+      <mesh position={[0, 0, -0.5]}>
+        <circleGeometry args={[27, 48]} />
+        <meshBasicMaterial color="#fff6c8" opacity={0.45} {...flat} />
+      </mesh>
       <mesh>
-        <circleGeometry args={[18, 48]} />
-        <meshBasicMaterial color="#ffd23f" {...flat} />
+        <circleGeometry args={[17, 48]} />
+        <meshBasicMaterial color="#ffe57a" opacity={1} {...flat} />
       </mesh>
-      <mesh position={[0, 0, -0.2]}>
-        <circleGeometry args={[19.2, 48]} />
-        <meshBasicMaterial color="#f2a531" {...flat} />
-      </mesh>
-      {/* a sleepy happy face */}
-      {[-6, 6].map((x) => (
-        <mesh key={x} position={[x, 3, 0.2]}>
-          <ringGeometry args={[1.6, 2.6, 16, 1, 0, Math.PI]} />
-          <meshBasicMaterial color={INK} {...flat} />
-        </mesh>
-      ))}
-      <mesh position={[0, -2.5, 0.2]} rotation={[0, 0, Math.PI]}>
-        <ringGeometry args={[3.6, 4.8, 20, 1, 0, Math.PI]} />
-        <meshBasicMaterial color={INK} {...flat} />
-      </mesh>
-      {[-10, 10].map((x) => (
-        <mesh key={x} position={[x, -2, 0.1]} scale={[1.3, 0.8, 1]}>
-          <circleGeometry args={[2.4, 20]} />
-          <meshBasicMaterial color="#ff9d8a" {...flat} />
-        </mesh>
-      ))}
     </group>
   );
 }
@@ -462,27 +431,27 @@ function Lagoon({ lv }: { lv: Level }) {
 }
 
 // ---------- out at sea and up in the sky ----------
-function Duck({ lv }: { lv: Level }) {
+/** An anchored swim platform off the beach, gently riding the swell. */
+function Raft({ lv }: { lv: Level }) {
   const g = useRef<Group>(null);
   useFrame((st) => {
     if (!g.current || lv === 0) return;
     const t = st.clock.elapsedTime;
-    g.current.position.y = Math.sin(t * 1.2) * 0.25;
-    g.current.rotation.z = Math.sin(t * 0.9) * 0.06;
-    g.current.rotation.y = 0.5 + Math.sin(t * 0.2) * 0.3;
+    g.current.position.y = Math.sin(t * 1.1) * 0.12;
+    g.current.rotation.x = Math.sin(t * 0.8) * 0.03;
   });
   return (
-    <group position={[-10, 0, -72]}>
-      <group ref={g} rotation={[0, 0.5, 0]} scale={3.2}>
-        <B lv={lv} color="#ffd23f" position={[0, 0.5, 0]} scale={[1.25, 0.8, 1]}><sphereGeometry args={[1, 18, 14]} /></B>
-        <B lv={lv} color="#ffd23f" position={[0.75, 0.85, 0]} scale={[0.55, 0.7, 0.6]} rotation={[0, 0, 0.6]}><sphereGeometry args={[1, 14, 10]} /></B>
-        <B lv={lv} color="#ffd23f" position={[-0.85, 1.55, 0]}><sphereGeometry args={[0.62, 16, 12]} /></B>
-        <B lv={lv} color="#ff8a3d" position={[-1.45, 1.45, 0]} scale={[1, 0.45, 0.8]} rotation={[0, 0, Math.PI / 2]}><coneGeometry args={[0.32, 0.6, 12]} /></B>
-        {[-0.28, 0.28].map((s) => (
-          <mesh key={s} position={[-1.22, 1.75, s]}>
-            <sphereGeometry args={[0.09, 8, 6]} />
-            <meshBasicMaterial color={INK} />
-          </mesh>
+    <group position={[-10, 0, -70]} rotation={[0, 0.3, 0]}>
+      <group ref={g} scale={1.6}>
+        <B lv={lv} color="#c98b52" position={[0, 0.3, 0]}><boxGeometry args={[4, 0.3, 3]} /></B>
+        {[-1.6, -0.8, 0, 0.8, 1.6].map((x) => (
+          <B key={x} lv={lv} color="#a86f3e" position={[x, 0.47, 0]} line={0}><boxGeometry args={[0.06, 0.04, 3]} /></B>
+        ))}
+        {([[-1.8, -1.3], [1.8, -1.3], [-1.8, 1.3], [1.8, 1.3]] as const).map(([x, z], i) => (
+          <B key={i} lv={lv} color="#ffffff" position={[x, 0.15, z]} line={0}><cylinderGeometry args={[0.28, 0.28, 0.35, 10]} /></B>
+        ))}
+        {[-0.3, 0.3].map((z) => (
+          <B key={z} lv={lv} color="#d7dde6" position={[2.05, 0.95, z]} line={0}><cylinderGeometry args={[0.04, 0.04, 1.1, 6]} /></B>
         ))}
       </group>
     </group>
@@ -632,7 +601,7 @@ export function WaterPark({ onWalk }: { onWalk: (x: number, z: number) => void }
   return (
     <group>
       <SkyAndSea lv={lv} />
-      <Sun lv={lv} />
+      <Sun />
       <Beach onWalk={onWalk} />
       <Palms lv={lv} />
       <Parasols lv={lv} />
@@ -642,7 +611,7 @@ export function WaterPark({ onWalk }: { onWalk: (x: number, z: number) => void }
       <SplashPool at={BLUE_POOL} />
       <SplashPool at={YELLOW_POOL} />
       <Lagoon lv={lv} />
-      <Duck lv={lv} />
+      <Raft lv={lv} />
       <Buoys lv={lv} />
       <Island lv={lv} />
       <Sailboat lv={lv} />
