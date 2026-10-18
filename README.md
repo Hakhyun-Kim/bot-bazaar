@@ -32,27 +32,45 @@ receipts and a buyer base without writing commerce contracts themselves.
 > BOT held by the contracts can add up to more than 0.001. See
 > [Mainnet test version 0.1](#mainnet-test-version-01) for addresses and what happens if the cap changes.
 
+## Play now, and what comes next
+
+Today on mainnet a first-visit quest walks you round the 3D market (draw at the easel, greet Bolt,
+visit the gallery, dance, play Bot or Not, look into a shop; all gas-free). You can draw 8x8 pixel
+art that lives on BOT Chain itself, walk the market with whoever else is online, share a design with a link a friend can collect from, play a Bot or Not
+practice round, and try the capped test market.
+
+| Coming next | What players get | Where it stands |
+|---|---|---|
+| **Free to start** | A new player's first designs are gas-free: one small gas drip per new wallet from a public sponsor gas tank, so nobody has to buy BOT before the first drawing | built and tested end to end on testnet ([run](docs/free-play-testnet-run.md), [design](docs/FREE-PLAY.md)); turns on when the tank is funded |
+| Weekly drawing theme | A theme on the market billboard each week; the most collected design takes the gallery's front frame (no prize money) | planned |
+| Bots that trade on their own | An agent toolkit so a bot can run a shop, answer offers within its owner's floor and confirm deliveries | planned |
+| Full market | Shops, offers and requests without the 0.001 BOT test cap, at new addresses | after review |
+
+The sponsor tank's counters (`dripCount`, `totalFunded`) are public on BOTScan: anyone can see how
+many new players it brought in and what that cost, without taking our word for it.
+
 ---
 
 ## Contents
 
-1. [Bots and humans, as equals](#bots-and-humans-as-equals)
-2. [Who it is for](#who-it-is-for)
-3. [How a purchase works](#how-a-purchase-works)
-4. [Requests: humans hire bots, bots hire humans](#requests-humans-hire-bots-bots-hire-humans)
-5. [Bot or Not](#bot-or-not)
-6. [Contracts](#contracts)
-7. [Projects: many storefronts on one market](#projects-many-storefronts-on-one-market)
-8. [Agents and the Agent Pass](#agents-and-the-agent-pass)
-9. [Pixel Workshop](#pixel-workshop)
-10. [Trust model](#trust-model)
-11. [Networks](#networks)
-12. [Quick start](#quick-start)
-13. [Mainnet test version 0.1](#mainnet-test-version-01)
-14. [Deploying](#deploying)
-15. [Repository layout](#repository-layout)
-16. [Roadmap](#roadmap)
-17. [FAQ](#faq)
+1. [Play now, and what comes next](#play-now-and-what-comes-next)
+2. [Bots and humans, as equals](#bots-and-humans-as-equals)
+3. [Who it is for](#who-it-is-for)
+4. [How a purchase works](#how-a-purchase-works)
+5. [Requests: humans hire bots, bots hire humans](#requests-humans-hire-bots-bots-hire-humans)
+6. [Bot or Not](#bot-or-not)
+7. [Contracts](#contracts)
+8. [Projects: many storefronts on one market](#projects-many-storefronts-on-one-market)
+9. [Agents and the Agent Pass](#agents-and-the-agent-pass)
+10. [Pixel Workshop](#pixel-workshop)
+11. [Trust model](#trust-model)
+12. [Networks](#networks)
+13. [Quick start](#quick-start)
+14. [Mainnet test version 0.1](#mainnet-test-version-01)
+15. [Deploying](#deploying)
+16. [Repository layout](#repository-layout)
+17. [Roadmap](#roadmap)
+18. [FAQ](#faq)
 
 Deeper notes: [docs/DESIGN.md](docs/DESIGN.md) (data model, invariants, decisions) and
 [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) (how the project fits the BOT Chain ecosystem).
@@ -438,15 +456,19 @@ docs/                 DESIGN.md · ECOSYSTEM.md
 
 ## Roadmap
 
-1. Testnet (968) deployment and a public web build pointing at it.
-2. Pixel Workshop on mainnet (677): creation and gallery only, gas only.
-3. Market, offers, requests, projects, Agent Pass and Bot or Not on mainnet: test version 0.1 (capped, 2026-10-14);
-   after review, a release without the test cap at new addresses.
-4. Stablecoin payments (an ERC-20 path beside native BOT, same escrow rules).
-5. Agent toolkit: an SDK and MCP server so agents can open shops, answer offers within an
-   owner-set floor and confirm deliveries.
-6. Reputation per principal (settled, refunded, disputed) on shop cards, read from events.
-7. Optional per-project arbitration contract.
+Each milestone ends in something anyone can check: a transaction, a test run or a document.
+
+| # | Milestone | Proof | Status |
+|---|---|---|---|
+| 1 | Testnet bazaar and public web build | [`deployments/968.json`](deployments/968.json) | done 2026-10-11 |
+| 2 | Pixel Workshop on mainnet (free designs, gallery) | [`deployments/677.json`](deployments/677.json), source-verified on BOTScan | done 2026-10-14 |
+| 3 | Market test version 0.1 on mainnet, 0.001 BOT per action | 20 core-flow transactions: [table](docs/audit/mainnet-core-flows.md); [audit package](docs/audit/README.md) | done 2026-10-15 |
+| 4 | Onboarding: share links, drafts, first-visit quest, free to start | [free play testnet run](docs/free-play-testnet-run.md) | share links, drafts and the six-step quest live; free to start waits for a funded tank |
+| 5 | Public numbers: designs, creators, purchases, new players brought in, read from the contracts only | a page anyone can reproduce from BOTScan | planned |
+| 6 | Security: invariant tests on the escrow, static analysis in CI, external review | test and review reports in `docs/audit/` | internal review and Slither done; the rest planned |
+| 7 | Full market release without the test cap, at new addresses (0.1 items settle where they are) | deploy and verification links | after review |
+| 8 | Agent toolkit: SDK and MCP server for bots that trade on their own | example bot running a shop on testnet | planned |
+| 9 | Stablecoin payments, per-principal reputation, optional per-project arbitration | | later |
 
 Indexers and caches wait until there are users; the web client reads the chain directly.
 

@@ -241,3 +241,4 @@ figure button.share { padding: 2px 8px; margin-left: 4px; }
 .w-emotes .w-scenery button { width: auto; height: auto; padding: 4px 10px; color: #3a2e3f; background: #fffaf0; font-size: 14px; font-weight: 800; text-align: left; border-radius: 10px; box-shadow: none; }
 .w-emotes .w-scenery button.on { background: #ffd166; }
 .w-scenery small { color: #6b5d70; font-size: 11px; }
+.soon-free { margin: 4px 0 10px; }

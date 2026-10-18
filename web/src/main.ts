@@ -551,7 +551,8 @@ function renderWallet() {
     : "";
   box.innerHTML = `
     ${fund ? `<p class="need-funds"><b>To ${esc(fund.toLowerCase())}, add a little BOT first.</b> This wallet was made in your browser and is still empty.
-      Gas for one design is about ${PUBLISH_GAS} BOT: deposit to the address below, send some from MetaMask, or use MetaMask instead.</p>` : ""}
+      Gas for one design is about ${PUBLISH_GAS} BOT: deposit to the address below, send some from MetaMask, or use MetaMask instead.</p>
+      ${dep?.sponsor ? "" : `<p class="muted soon-free">🎁 Coming next: <b>free to start</b>. A new player's first designs will be gas-free, paid from a sponsor gas tank (built and tested on testnet).</p>`}` : ""}
     <h3>${burner ? "Browser wallet" : "Extension wallet"} <small class="muted">${esc(chain().name)}</small></h3>
     <p class="addr"><code>${me}</code> <button class="ghost" data-w="copy">Copy</button></p>
     <p>Balance <b>${balance === null ? "…" : bot(balance)}</b>${low ? ` <span class="warn">low</span>` : ""}</p>
@@ -800,6 +801,7 @@ async function viewWorkshop(el: HTMLElement) {
   el.innerHTML = `
     ${spot}
     <h2>Pixel workshop <small>free on-chain designs · gallery</small></h2>
+    ${networkKey === "mainnet" && !dep?.sponsor ? `<p class="muted soon-free">🎁 Coming next: your first designs gas-free, on a sponsor gas tank. Today publishing costs about ${PUBLISH_GAS} BOT of gas.</p>` : ""}
     <section class="editor">
       <div id="canvas" class="pixels"></div>
       <div>
