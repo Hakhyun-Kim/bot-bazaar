@@ -16,7 +16,7 @@ import { BlobShadow, Props, type PropAt } from "./props";
 import { GRAD, INK, hue } from "./toon";
 import { completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
 import { joinMarket, leaveMarket, myName, onPeerEmote, peers, peersVersion, setMyName, subscribePeers, tellEmote, tellPose } from "./peers";
-import { finishTour, subscribeTour, tour, walkTour } from "./tour";
+import { QUESTS, completeQuest, currentQuest, endQuests, finishTour, foldQuests, guideQuest, isLocked, onQuestDone, questCount, quests, questsComplete, setQuestSoon, skipTour, stopGuide, subscribeTour, tour, walkTour, type Quest, type QuestId } from "./tour";
 import { BEACH_IN, WaterPark, useLevel } from "./waterpark";
 import { DPR, LEVEL_NAME, autoStep, chooseScenery, scenery, type Choice } from "./scenery";
 
@@ -296,6 +296,7 @@ function talk(r: Resident) {
   bubbles.set(r.id, { text: r.lines[i % r.lines.length], until: performance.now() + 5200 });
   chatEmit();
   finishErrand("talk");
+  completeQuest("hello");
 }
 
 /** A line said unasked. Bolt reads the real numbers off the billboard. */
@@ -345,15 +346,22 @@ function doEmote(icon: string) {
   bubbles.set("me", { text: n ? `${icon} together ×${n + 1}` : icon, emote: icon, until: now + 2200 });
   tellEmote(icon);
   chatEmit();
-  if (people && !near.length) finishErrand("together");
+  if (people && !near.length) finishErrand("together"), completeQuest("together");
   if (!near.length) return;
   setTimeout(() => {
     const t = performance.now();
     for (const r of near) bubbles.set(r.id, { text: `${icon} together!`, emote: icon, until: t + 2200 });
     chatEmit();
     finishErrand("together");
+    completeQuest("together");
   }, 450);
 }
+
+// A quest done: a tick over the player's head (the tracker pops too).
+onQuestDone((q) => {
+  bubbles.set("me", { text: `✅ ${q.title}`, until: performance.now() + 3000 });
+  chatEmit();
+});
 
 // Someone else in the market emotes: it shows over their head, like anyone's.
 onPeerEmote((id, icon) => {
@@ -955,20 +963,57 @@ function Ground() {
   );
 }
 
-// ---------- first-visit tour: a dotted path to the easel ----------
+// ---------- first-visit tour and quests: a dotted path to where the next step happens ----------
 /** Where the tour ends: on the west path, just in front of the easel. */
 const TOUR_END = { x: LANDMARK.wall.x + 2.7, z: LANDMARK.wall.z };
+/** Where the scene put the first gallery frame and the first shop (or the free stall), for the quests. */
+const placesAt: { gallery: { x: number; z: number } | null; shop: { x: number; z: number } | null } = { gallery: null, shop: null };
+const BOLT = RESIDENTS.find((r) => r.id === "bolt")!;
+const KIP = RESIDENTS.find((r) => r.id === "kip")!;
+/** A spot this far from a thing at (x, z), on the side facing the middle of the plaza. */
+const before = (x: number, z: number, gap: number) => {
+  const r = Math.hypot(x, z) || 1;
+  return { x: x * (1 - gap / r), z: z * (1 - gap / r) };
+};
+/** Where a quest happens: where to stand (the ring) and what the arrow floats over. */
+function questGoal(id: QuestId): { stand: { x: number; z: number }; over: { x: number; z: number; y: number } } | null {
+  switch (id) {
+    case "draw":
+    case "publish":
+      return { stand: TOUR_END, over: { ...LANDMARK.wall, y: 6.3 } };
+    case "hello":
+      return { stand: { x: BOLT.home[0] - 0.4, z: BOLT.home[1] - 1.3 }, over: { x: BOLT.home[0], z: BOLT.home[1], y: 3.4 } };
+    case "gallery":
+      return placesAt.gallery && { stand: before(placesAt.gallery.x, placesAt.gallery.z, 2.4), over: { ...placesAt.gallery, y: 4.6 } };
+    case "together":
+      return { stand: { x: -2.1, z: -12.2 }, over: { x: KIP.home[0] + 0.7, z: KIP.home[1] - 0.4, y: 3.6 } };
+    case "theatre":
+      return { stand: before(LANDMARK.stage.x, LANDMARK.stage.z, 3.4), over: { ...LANDMARK.stage, y: 6.3 } };
+    case "shop":
+      return placesAt.shop && { stand: before(placesAt.shop.x, placesAt.shop.z, 2.4), over: { ...placesAt.shop, y: 4.6 } };
+  }
+}
+/** Which quest the dots lead to right now: the easel while the welcome card is up, else the current
+ *  quest once "Show me" was pressed. */
+function pathQuest(): Quest | null {
+  const s = quests();
+  if (s.over) return null;
+  if (tour.active) return QUESTS[0];
+  return tour.guide ? currentQuest(s, tour.soon) : null;
+}
 /** From where the player stands round the open middle of the plaza (inside the stall rings, outside
- *  the lockers), then down the west path to the easel. */
-function tourRoute(px: number, pz: number): [number, number][] {
+ *  the lockers), then straight out to the spot. Close by, straight there. */
+function tourRoute(px: number, pz: number, end = TOUR_END): [number, number][] {
   const out: [number, number][] = [[px, pz]];
-  if (!(px < -8 && Math.abs(pz) < 3)) {
+  const a1 = Math.atan2(end.x, -end.z);
+  const a0 = Math.atan2(px, -pz);
+  let da = a1 - a0;
+  while (da > Math.PI) da -= Math.PI * 2;
+  while (da < -Math.PI) da += Math.PI * 2;
+  const r0 = Math.hypot(px, pz);
+  const close = Math.hypot(end.x - px, end.z - pz) < 4 || (r0 > 8 && Math.abs(da) * r0 < 3);
+  if (!close) {
     const R = 7;
-    const r0 = Math.hypot(px, pz);
-    const a0 = Math.atan2(px, -pz);
-    let da = -Math.PI / 2 - a0;
-    while (da > Math.PI) da -= Math.PI * 2;
-    while (da < -Math.PI) da += Math.PI * 2;
     const steps = Math.max(2, Math.ceil((Math.abs(da) * R + Math.abs(r0 - R)) / 1.2));
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
@@ -977,29 +1022,32 @@ function tourRoute(px: number, pz: number): [number, number][] {
       out.push([Math.sin(a) * r, -Math.cos(a) * r]);
     }
   }
-  out.push([TOUR_END.x, TOUR_END.z]);
+  out.push([end.x, end.z]);
   return out;
 }
 
-const useTour = () => useSyncExternalStore(subscribeTour, () => tour.active);
+const useTour = () => useSyncExternalStore(subscribeTour, () => tour.version);
 const DOTS = 90;
 const DOT_GAP = 0.8;
 
-/** Marching dots on the ground from the player to the easel, a bouncing arrow over it and a ring
- *  where to stand. Only while the first-visit tour runs. */
+/** Marching dots on the ground from the player to where the next step happens, a bouncing arrow over
+ *  it and a ring where to stand. Only during the welcome tour or after a quest's "Show me". */
 function TourPath() {
-  const active = useTour();
+  useTour();
+  useData();
+  const q = pathQuest();
+  const goal = q && questGoal(q.id);
   const ink = useRef<InstancedMesh>(null);
   const gold = useRef<InstancedMesh>(null);
   const arrow = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
   const dummy = useMemo(() => new Object3D(), []);
   useFrame(({ clock }) => {
-    if (!ink.current || !gold.current) return;
+    if (!ink.current || !gold.current || !goal) return;
     const t = clock.elapsedTime;
-    const route = tourRoute(player.x, player.z);
+    const route = tourRoute(player.x, player.z, goal.stand);
     let n = 0;
-    let carry = DOT_GAP - ((t * 1.6) % DOT_GAP); // dots march toward the easel
+    let carry = DOT_GAP - ((t * 1.6) % DOT_GAP); // dots march toward the goal
     let walked = 0;
     for (let i = 1; i < route.length && n < DOTS; i++) {
       const [ax, az] = route[i - 1];
@@ -1026,10 +1074,10 @@ function TourPath() {
     }
     ink.current.count = gold.current.count = n;
     ink.current.instanceMatrix.needsUpdate = gold.current.instanceMatrix.needsUpdate = true;
-    if (arrow.current) (arrow.current.position.y = 6.3 + Math.abs(Math.sin(t * 3)) * 0.5), (arrow.current.rotation.y = t * 1.5);
+    if (arrow.current) (arrow.current.position.y = goal.over.y + Math.abs(Math.sin(t * 3)) * 0.5), (arrow.current.rotation.y = t * 1.5);
     if (ring.current) ring.current.scale.setScalar(1 + (t % 1.2) * 0.4), ((ring.current.material as MeshBasicMaterial).opacity = 0.9 - (t % 1.2) * 0.6);
   });
-  if (!active) return null;
+  if (!goal) return null;
   return (
     <group>
       <instancedMesh ref={ink} args={[undefined, undefined, DOTS]} frustumCulled={false}>
@@ -1040,11 +1088,11 @@ function TourPath() {
         <circleGeometry args={[0.14, 16]} />
         <meshBasicMaterial color="#ffd166" />
       </instancedMesh>
-      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[TOUR_END.x, 0.05, TOUR_END.z]}>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[goal.stand.x, 0.05, goal.stand.z]}>
         <ringGeometry args={[0.9, 1.15, 40]} />
         <meshBasicMaterial color="#ffd166" transparent />
       </mesh>
-      <group ref={arrow} position={[LANDMARK.wall.x, 6.3, LANDMARK.wall.z]}>
+      <group ref={arrow} position={[goal.over.x, goal.over.y, goal.over.z]} scale={goal.over.y < 5 ? 0.7 : 1}>
         <P color="#ffd166" rotation={[Math.PI, 0, 0]} line={0.05}><coneGeometry args={[0.55, 0.9, 4]} /></P>
         <P color="#ffd166" position={[0, 0.75, 0]} line={0.05}><boxGeometry args={[0.35, 0.7, 0.35]} /></P>
       </group>
@@ -1054,19 +1102,107 @@ function TourPath() {
 
 /** The tour's card: what to do, walk me there, or skip. */
 function TourCard() {
-  const active = useTour();
-  const walking = useSyncExternalStore(subscribeTour, () => tour.walking);
-  if (!active) return null;
+  useTour();
+  if (!tour.active) return null;
   return (
     <div className="w-tour" role="dialog" aria-label="Welcome">
       <p>
         <b>👋 Welcome to BOT Bazaar!</b>
-        {walking ? "Off to the easel… 🎨" : "Follow the yellow dots to the 🎨 easel and draw your first pixel art. It's free."}
+        {tour.walking ? "Off to the easel… 🎨" : "Follow the yellow dots to the 🎨 easel and draw your first pixel art. It's free."}
       </p>
       <div>
-        {!walking && <button type="button" className="fun" onClick={walkTour}>Walk me there</button>}
-        <button type="button" className="ghost" onClick={finishTour}>Skip</button>
+        {!tour.walking && <button type="button" className="fun" onClick={walkTour}>Walk me there</button>}
+        <button type="button" className="ghost" onClick={skipTour}>Skip</button>
       </div>
+    </div>
+  );
+}
+
+/** What happens on arriving somewhere after "Show me", so the step finishes in one go. */
+function arrive(id: QuestId, open: (t: Target) => void) {
+  if (id === "hello") talk(BOLT);
+  else if (id === "theatre") open({ kind: "tab", tab: "botornot" });
+  else if (id === "publish") open({ kind: "tab", tab: "workshop" });
+  else if (id === "together") {
+    bubbles.set(KIP.id, { text: "Dance with us! Tap 💃", emote: "💃", until: performance.now() + 4200 });
+    chatEmit();
+  } else if (id === "shop") {
+    const shop = data.shops[0];
+    if (shop) open({ kind: "shop", owner: shop.owner });
+  }
+}
+
+/** The quest list, top left where today's errand goes once the quests are done. Folds to a pill. */
+function QuestTracker() {
+  useTour();
+  useData();
+  const s = quests();
+  const [pop, setPop] = useState<string | null>(null);
+  useEffect(
+    () =>
+      onQuestDone((q) => {
+        setPop(q.id);
+        setTimeout(() => setPop((p) => (p === q.id ? null : p)), 1600);
+      }),
+    [],
+  );
+  if (s.over) return null;
+  const soon = tour.soon;
+  const cur = currentQuest(s, soon);
+  const n = questCount(s, soon);
+  const all = questsComplete(s, soon);
+  if (s.folded || tour.active)
+    return (
+      <button type="button" className={`w-quest-pill${pop ? " pop" : ""}`} onClick={() => foldQuests(false)} aria-label="Show quests">
+        📜 Quests {n.done}/{n.of}
+        {cur && !tour.active ? <span> · {cur.title}</span> : null} ›
+      </button>
+    );
+  if (all)
+    return (
+      <div className={`w-quests done${pop ? " pop" : ""}`} role="status">
+        <p><b>🏅 Quests done!</b> You know your way around the market now. Next: one small errand a day, with a stamp for each.</p>
+        {cur && <p className="w-quest-bonus">☆ Bonus: {cur.title}. {cur.hint}</p>}
+        <div>
+          {cur && <button type="button" className="fun" onClick={guideQuest}>Show me</button>}
+          <button type="button" className="ghost" onClick={endQuests}>Done</button>
+        </div>
+      </div>
+    );
+  return (
+    <div className={`w-quests${pop ? " pop" : ""}`} role="region" aria-label="Quests">
+      <header>
+        <b>📜 Quests {n.done}/{n.of}</b>
+        <button type="button" className="w-quest-fold" onClick={() => foldQuests(true)} aria-label="Fold quests" title="Fold">–</button>
+      </header>
+      <ol>
+        {QUESTS.map((q) => {
+          const done = s.done.includes(q.id);
+          const locked = isLocked(q, soon);
+          const now = cur?.id === q.id;
+          return (
+            <li key={q.id} className={done ? "done" : locked ? "locked" : now ? "now" : ""}>
+              <span>{done ? "✅" : locked ? "🔒" : "bonus" in q ? "☆" : now ? "▶" : "○"}</span>
+              <span>
+                {"bonus" in q && !done ? "Bonus: " : ""}
+                {q.title}
+                {locked ? <i> · coming soon here</i> : "bonus" in q && !done ? <i> · uses a little gas</i> : null}
+                {now && !done ? <small>{q.hint}</small> : null}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {cur && (
+        <div>
+          {tour.guide ? (
+            <button type="button" className="ghost" onClick={stopGuide}>Hide the dots</button>
+          ) : (
+            <button type="button" className="fun" onClick={guideQuest}>Show me</button>
+          )}
+          <button type="button" className="link" onClick={endQuests}>Stop quests</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1129,13 +1265,20 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
     const k = keys.current;
     let dx = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
     let dz = (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0) - (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0);
+    const pq = pathQuest();
+    const goal = pq && questGoal(pq.id);
     if (tour.active && Math.hypot(TOUR_END.x - player.x, TOUR_END.z - player.z) < 1.6) {
       // arrived at the easel: the workshop opens by itself, and the tour is over
       player.target = null;
       finishTour();
       open({ kind: "tab", tab: "workshop" });
-    } else if (tour.walking && !dx && !dz) {
-      const route = tourRoute(player.x, player.z);
+    } else if (tour.guide && goal && Math.hypot(goal.stand.x - player.x, goal.stand.z - player.z) < 1.6) {
+      // arrived after "Show me": the step happens by itself where it can
+      player.target = null;
+      stopGuide();
+      arrive(pq!.id, open);
+    } else if (tour.walking && goal && !dx && !dz) {
+      const route = tourRoute(player.x, player.z, goal.stand);
       const next = route.find(([x, z]) => Math.hypot(x - player.x, z - player.z) > 1.2) ?? route[route.length - 1];
       player.target = { x: next[0], z: next[1] };
     }
@@ -1182,6 +1325,7 @@ function Player({ spots, setNear, open }: { spots: Spot[]; setNear: (s: Spot | n
       if (dd < 2.2 && dd < bestD) (best = s), (bestD = dd);
     }
     if (best && best.name.endsWith("(gallery)")) finishErrand("gallery");
+    if (best && (best.name.endsWith("(gallery)") || best.name.startsWith("Empty frame"))) completeQuest("gallery");
     if (body.current) emoteMotion(body.current, bubbles.get("me"), performance.now() / 1000);
     if (best?.name !== nearRef.current?.name) {
       nearRef.current = best;
@@ -1219,6 +1363,8 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
   const used = placed.length + (free ? 1 : 0);
   const gallery = SLOTS.slice(used, used + (d.soon ? 6 : Math.min(4, d.designs.length))).map((slot, i) => ({ slot, design: d.designs[i] ?? null }));
   const shut = d.soon ? SLOTS.slice(used + gallery.length, used + gallery.length + 2) : [];
+  placesAt.gallery = gallery[0]?.slot ?? null;
+  placesAt.shop = placed[0]?.slot ?? free ?? null;
   const spots = useMemo<Spot[]>(() => {
     const out: Spot[] = placed.map(({ shop, slot }) => ({ x: slot.x, z: slot.z, r: 1.7, name: shop.title, target: { kind: "shop", owner: shop.owner } }));
     if (free) out.push({ x: free.x, z: free.z, r: 1.7, name: "Free stall: open your shop", target: { kind: "tab", tab: "account" } });
@@ -1287,6 +1433,7 @@ function Root({ open }: { open: (t: Target) => void }) {
         <PerformanceMonitor flipflops={4} onDecline={() => autoStep(-1)} onIncline={() => autoStep(1)} onFallback={() => autoStep("floor")} />
         <Scene open={open} setNear={setNear} />
       </Canvas>
+      <QuestTracker />
       <ErrandChip />
       <TourCard />
       <Billboard open={open} />
@@ -1378,6 +1525,8 @@ function rename() {
 /** Today's errand, under the Pixel Workshop button. */
 function ErrandChip() {
   useChat();
+  useTour();
+  if (!quests().over) return null; // the quests come first; the daily errand takes their place after
   const e = errandFor(errand.day);
   return (
     <div className={`w-errand${errand.done ? " done" : ""}`} title="One small errand a day. Stamps stay in this browser.">
@@ -1393,6 +1542,7 @@ export function mountWorld(el: HTMLElement, open: (t: Target) => void): WorldApi
   return {
     update(d) {
       data = d;
+      setQuestSoon(d.soon);
       emit();
     },
     pulse() {

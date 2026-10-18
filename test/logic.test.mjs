@@ -79,3 +79,23 @@ test("the page and the free-gas relayer sign the same message", async () => {
   const a = "0x7cfD8d742C58D9e43A5AA20E8A786A2D193655B3";
   assert.equal(web.claimMessage(677, a), relayer.claimMessage(677, a.toLowerCase()));
 });
+
+test("quests: a newcomer starts at the easel, returning players are not greeted again, locked steps never block", async () => {
+  const { QUESTS, loadQuests, currentQuest, markQuest, questsComplete, questCount } = await import("../web/src/world/tour.ts");
+  const mem = (o) => ({ getItem: (k) => o[k] ?? null, setItem: (k, v) => (o[k] = v) });
+  let s = loadQuests(mem({}));
+  assert.equal(currentQuest(s, false).id, "draw");
+  assert.equal(s.folded, false);
+  const back = loadQuests(mem({ "bazaar-tour-done": "1" }));
+  assert.deepEqual(back.done, ["draw"]);
+  assert.equal(back.folded, true, "a returning player sees the folded pill");
+  // workshop-only network: the shop step is locked and the line can still finish
+  for (const q of QUESTS) if (q.id !== "publish") s = markQuest(s, q.id, true) ?? s;
+  assert.ok(!s.done.includes("shop"));
+  assert.ok(questsComplete(s, true));
+  assert.equal(currentQuest(s, true).id, "publish", "the bonus is offered once the rest is done");
+  assert.equal(questCount(s, true).of, QUESTS.length - 2);
+  assert.ok(!questsComplete(s, false), "with shops open, the shop step counts");
+  assert.equal(markQuest(s, "draw", false), null, "done twice changes nothing");
+  assert.deepEqual(loadQuests(mem({ "bazaar-quests": "{bad" })).done, []);
+});

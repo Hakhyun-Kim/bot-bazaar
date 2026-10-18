@@ -25,7 +25,7 @@ import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
 import { PRESET16, encodePalette, encodePixels, patternCanvas } from "./pixel";
 import { PRACTICE, nextPractice } from "./world/errands";
-import { finishTour, tour } from "./world/tour";
+import { completeQuest, finishTour, tour } from "./world/tour";
 import { setupMusic } from "./music";
 import { claimFreeGas, claimMessage, sponsorStatus, type SponsorStatus } from "./sponsor";
 import "./style.css";
@@ -859,7 +859,7 @@ async function viewWorkshop(el: HTMLElement) {
       // The new design goes up front with its share buttons, and the canvas starts clean.
       const ev = parseEventLogs({ abi: ABI.PixelWorkshop, logs: (r as { logs: Log[] }).logs, eventName: "DesignRegistered" } as never)[0] as unknown as { args: { id: bigint } } | undefined;
       store.set(DRAFT, "");
-      if (ev) (spotlight = Number(ev.args.id)), (justPublished = true);
+      if (ev) (spotlight = Number(ev.args.id)), (justPublished = true), completeQuest("publish");
       return render();
     }, () => undefined);
   });
@@ -1260,6 +1260,8 @@ function openPanel(t: Target) {
     world?.errand("draw");
     finishTour();
   }
+  if (t.kind === "tab" && t.tab === "botornot") completeQuest("theatre");
+  if (t.kind === "shop" || (t.kind === "tab" && t.tab === "account" && !workshopOnly() && !shopCache.size)) completeQuest("shop");
   void renderPanel();
 }
 

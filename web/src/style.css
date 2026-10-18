@@ -194,6 +194,32 @@ a.fun-link { display: inline-block; padding: 2px 10px; text-decoration: none; }
 .w-tour div { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .w-tour button { padding: 4px 12px; font-size: 14px; }
 @media (max-width: 640px) { .w-tour { bottom: 156px; font-size: 13px; } }
+/* quests: top left, where today's errand goes once they are done */
+.w-quests, .w-quest-pill { position: absolute; top: 84px; left: 12px; z-index: 24; color: #3a2e3f; background: #fffaf0; border: 2.5px solid #3a2e3f;
+  border-radius: 12px; box-shadow: 0 3px 0 #3a2e3f; font: 700 12px/1.35 ui-rounded, "Nunito", system-ui, sans-serif; }
+.w-quest-pill { padding: 4px 10px; max-width: min(320px, calc(100% - 24px)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.w-quest-pill span { font-weight: 600; }
+.w-quests { width: min(290px, calc(100% - 24px)); padding: 8px 10px; }
+.w-quests header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+.w-quests header button { color: #3a2e3f; background: transparent; border: 0; padding: 0 6px; font-size: 18px; line-height: 1; }
+.w-quests ol { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 3px; }
+.w-quests li { display: flex; gap: 6px; }
+.w-quests li > span:first-child { flex: none; width: 18px; text-align: center; }
+.w-quests li.done { color: #7a7080; text-decoration: line-through; text-decoration-color: #b8aebb; }
+.w-quests li.locked { color: #8d8592; }
+.w-quests li.now { font-weight: 900; }
+.w-quests li i { font-style: normal; font-weight: 600; color: #8d8592; }
+.w-quests li small { display: block; font-weight: 600; color: #5f5464; }
+.w-quests > div { display: flex; gap: 8px; align-items: center; }
+.w-quests > div button { padding: 3px 12px; font-size: 13px; }
+.w-quests > div button.ghost { color: #3a2e3f; border-color: #3a2e3f; }
+.w-quests > div button.link { background: none; border: 0; color: #6b5d70; text-decoration: underline; padding: 3px 2px; font-size: 12px; }
+.w-quests.done { background: #e4f8e0; }
+.w-quests.done p { margin: 0 0 6px; }
+.w-quests.done b { display: block; font-size: 15px; font-weight: 900; }
+.w-quest-bonus { font-weight: 600; }
+.w-quests.pop, .w-quest-pill.pop { animation: w-pop 0.4s ease-out; }
+@media (max-width: 640px) { .w-quests { width: min(250px, calc(100% - 24px)); font-size: 11.5px; } .w-quests li:not(.now) { display: none; } }
 #music { padding: 4px 9px; font-size: 16px; line-height: 1; flex: none; }
 
 /* sharing a design, sponsored free gas */
