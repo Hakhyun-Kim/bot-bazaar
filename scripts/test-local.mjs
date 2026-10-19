@@ -1,8 +1,9 @@
 // End-to-end on a local anvil (chain id 677, paris hardfork): deploy all seven contracts and walk
 // every path a buyer, seller, project owner, agent and creator can take. Gas-free, a few seconds.
-import { parseEther, zeroAddress } from "viem";
+//   --v1   the same walk on version 1.0 (contracts-v1/), plus the checks for each fixed finding
+import { encodeFunctionData, parseEther, zeroAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { SPONSOR, compileAll } from "./lib/compile.mjs";
+import { SPONSOR, compileAll, compileV1 } from "./lib/compile.mjs";
 import { claimMessage } from "../sponsor/relayer.mjs";
 import { serve } from "../sponsor/serve.mjs";
 import { ANVIL_KEYS, ANVIL_MISSING, deployAll, deployOne, startChain } from "./lib/localchain.mjs";
@@ -12,7 +13,11 @@ if (!node) {
   console.log(ANVIL_MISSING);
   process.exit(0);
 }
-const artifacts = compileAll();
+const V1 = process.argv.includes("--v1");
+const artifacts = V1 ? compileV1() : compileAll();
+// Version 1.0 buyers name the shop item they mean (L-3).
+const item = (seller, index, name) => (V1 ? [seller, index, name] : [seller, index]);
+if (V1) console.log("version 1.0 (contracts-v1/)");
 const [deployer, seller, buyer, other] = ANVIL_KEYS.map((k) => node.wallet(k));
 const addr = (w) => w.account.address;
 const d = await deployAll({ pub: node.pub, wallet: deployer, artifacts });
@@ -90,13 +95,13 @@ await check("rejects bad category, 9 items, zero price", async () => {
   await reverts(other, "BazaarMarket", "openShop", ["t", "", 0, 0, [{ name: "a", price: 0n }]], undefined, "price");
 });
 await check("wrong price is refused", async () => {
-  await reverts(buyer, "BazaarMarket", "buyItem", [addr(seller), 0], parseEther("0.009"), "WrongPrice");
+  await reverts(buyer, "BazaarMarket", "buyItem", item(addr(seller), 0, "Pixel frame"), parseEther("0.009"), "WrongPrice");
 });
 
 console.log("\nescrow");
 await check("buy → escrow → buyer confirms → seller paid, receipt minted", async () => {
   const before = await balance(seller);
-  await write(buyer, "BazaarMarket", "buyItem", [addr(seller), 0], parseEther("0.01"));
+  await write(buyer, "BazaarMarket", "buyItem", item(addr(seller), 0, "Pixel frame"), parseEther("0.01"));
   const tid = await read("BazaarMarket", "tokenIdOf", [addr(seller), "Pixel frame"]);
   eq(await read("BazaarMarket", "balanceOf", [addr(buyer), tid]), 0n, "receipt before settle");
   await write(buyer, "BazaarMarket", "confirm", [0n]);
@@ -106,7 +111,7 @@ await check("buy → escrow → buyer confirms → seller paid, receipt minted",
   JSON.parse(decodeURIComponent(uri.slice(uri.indexOf(",") + 1)));
 });
 await check("dispute holds 7 days; release before fails, after succeeds", async () => {
-  await write(buyer, "BazaarMarket", "buyItem", [addr(seller), 1], parseEther("0.05"));
+  await write(buyer, "BazaarMarket", "buyItem", item(addr(seller), 1, "API key (30 days)"), parseEther("0.05"));
   await write(buyer, "BazaarMarket", "dispute", [1n]);
   await node.increaseTime(2 * DAY);
   await reverts(other, "BazaarMarket", "release", [1n], undefined, "early");
@@ -115,7 +120,7 @@ await check("dispute holds 7 days; release before fails, after succeeds", async 
   eq((await read("BazaarMarket", "purchaseOf", [1n]))[4], true, "settled");
 });
 await check("seller refund returns money and mints no receipt", async () => {
-  await write(buyer, "BazaarMarket", "buyItem", [addr(seller), 0], parseEther("0.01"));
+  await write(buyer, "BazaarMarket", "buyItem", item(addr(seller), 0, "Pixel frame"), parseEther("0.01"));
   const tid = await read("BazaarMarket", "tokenIdOf", [addr(seller), "Pixel frame"]);
   const held = await read("BazaarMarket", "balanceOf", [addr(buyer), tid]);
   await reverts(buyer, "BazaarMarket", "refund", [2n], undefined, "seller");
@@ -261,7 +266,7 @@ await check("declare a kind; the market treats a declared bot exactly like anyon
   await write(other, "AgentPass", "declare", [2, "price bot"]);
   eq(await read("AgentPass", "kindOf", [addr(other)]), 2);
   await write(other, "BazaarMarket", "openShop", ["Bot stall", "", 0, 3, [{ name: "Daily report", price: 1000n }]]);
-  await write(buyer, "BazaarMarket", "buyItem", [addr(other), 0], 1000n);
+  await write(buyer, "BazaarMarket", "buyItem", item(addr(other), 0, "Daily report"), 1000n);
 });
 
 console.log("\nbot or not");
@@ -385,7 +390,7 @@ await check("listings and shop prices above the cap are refused; at the cap they
   await creverts(seller, "BazaarMarket", "list", ["Big", CAP + 1n], undefined, "OverCap");
   await creverts(seller, "BazaarMarket", "openShop", ["t", "", 0, 0, [{ name: "a", price: CAP + 1n }]], undefined, "OverCap");
   await cwrite(seller, "BazaarMarket", "openShop", ["Tiny", "", 0, 0, [{ name: "a", price: CAP }]]);
-  await cwrite(buyer, "BazaarMarket", "buyItem", [addr(seller), 0], CAP);
+  await cwrite(buyer, "BazaarMarket", "buyItem", item(addr(seller), 0, "a"), CAP);
   await cwrite(buyer, "BazaarMarket", "confirm", [0n]);
 });
 await check("offers above the cap are refused; an accepted offer at the cap settles", async () => {
@@ -400,8 +405,9 @@ await check("request rewards above the cap are refused", async () => {
   await cwrite(buyer, "BazaarRequests", "post", ["Small job", "", 0, due], CAP);
 });
 
-console.log("\nsponsored free play (gas tank + relayer)");
-{
+if (V1) await v1Fixes();
+else {
+  console.log("\nsponsored free play (gas tank + relayer)");
   const tankArt = compileAll(SPONSOR).GasTank;
   const DRIP = parseEther("0.01");
   const relayKey = generatePrivateKey();
@@ -465,6 +471,137 @@ console.log("\nsponsored free play (gas tank + relayer)");
     eq(s.dripCount, 4, "status count");
   });
   server.close();
+}
+
+// Version 1.0: one check per fixed finding of docs/audit/internal-review.md.
+async function v1Fixes() {
+  console.log("\nversion 1.0 fixes");
+  const solc = (await import("solc")).default;
+  const src = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+contract Payee {
+    uint8 public mode = 1; // 0 accepts BOT, 1 rejects it, 2 burns all gas
+    function setMode(uint8 m) external { mode = m; }
+    function exec(address t, bytes calldata data) external payable {
+        (bool ok, ) = t.call{value: msg.value}(data);
+        require(ok, "exec");
+    }
+    receive() external payable {
+        require(mode != 1, "no");
+        if (mode == 2) while (true) {}
+    }
+}`;
+  const out = JSON.parse(solc.compile(JSON.stringify({ language: "Solidity", sources: { "Payee.sol": { content: src } }, settings: { evmVersion: "paris", outputSelection: { "*": { "*": ["abi", "evm.bytecode.object"] } } } })));
+  const c = out.contracts["Payee.sol"].Payee;
+  const deployPayee = async () => {
+    const hash = await deployer.deployContract({ abi: c.abi, bytecode: `0x${c.evm.bytecode.object}` });
+    return { address: (await node.pub.waitForTransactionReceipt({ hash })).contractAddress, abi: c.abi };
+  };
+  const v = await deployAll({ pub: node.pub, wallet: deployer, artifacts });
+  const vat = (name) => ({ address: v[name].address, abi: artifacts[name].abi });
+  const vread = (name, functionName, args = []) => node.pub.readContract({ ...vat(name), functionName, args });
+  const send = async (w, target, functionName, args = [], value) => {
+    const { request } = await node.pub.simulateContract({ ...target, functionName, args, value, account: w.account });
+    const r = await node.pub.waitForTransactionReceipt({ hash: await w.writeContract(request) });
+    if (r.status !== "success") throw new Error(`${functionName} reverted`);
+  };
+  const vreverts = async (w, name, functionName, args, value, reason) => {
+    try {
+      await node.pub.simulateContract({ ...vat(name), functionName, args, value, account: w.account });
+    } catch (e) {
+      if (reason && !String(e.message).includes(reason)) throw new Error(`reverted, but not with "${reason}": ${e.shortMessage}`);
+      return;
+    }
+    throw new Error(`${functionName} should revert`);
+  };
+  // The payee contract calls a v1 contract as itself.
+  const asPayee = (payee, name, functionName, args = [], value = 0n) =>
+    send(deployer, payee, "exec", [v[name].address, encodeFunctionData({ abi: artifacts[name].abi, functionName, args })], value);
+  const price = parseEther("0.01");
+
+  await check("L-1 a seller that rejects BOT no longer blocks the buyer: confirm settles, seller withdraws later", async () => {
+    const shop = await deployPayee();
+    await asPayee(shop, "BazaarMarket", "list", ["Sticker", price]);
+    await send(buyer, vat("BazaarMarket"), "buy", [shop.address, "Sticker"], price);
+    await send(buyer, vat("BazaarMarket"), "confirm", [0n]);
+    eq((await vread("BazaarMarket", "purchaseOf", [0n]))[4], true, "settled");
+    eq(await vread("BazaarMarket", "owed", [shop.address]), price, "owed");
+    eq(await vread("BazaarMarket", "totalOwed"), price, "total owed");
+    await vreverts(other, "BazaarMarket", "withdraw", [], undefined, "nothing owed");
+    await send(deployer, shop, "setMode", [0]);
+    await asPayee(shop, "BazaarMarket", "withdraw");
+    eq(await node.pub.getBalance({ address: shop.address }), price, "withdrawn");
+    eq(await vread("BazaarMarket", "totalOwed"), 0n);
+  });
+  await check("L-1 a payee that burns all gas is credited, not paid, and the caller's call still succeeds", async () => {
+    const shop = await deployPayee();
+    await send(deployer, shop, "setMode", [2]);
+    await asPayee(shop, "BazaarMarket", "list", ["Sticker", price]);
+    await send(buyer, vat("BazaarMarket"), "buy", [shop.address, "Sticker"], price);
+    await send(buyer, vat("BazaarMarket"), "confirm", [1n]);
+    eq(await vread("BazaarMarket", "owed", [shop.address]), price, "owed");
+  });
+  await check("L-1 offers and requests: a rejecting buyer, worker or poster is credited", async () => {
+    const p = await deployPayee();
+    await asPayee(p, "BazaarOffers", "makeOffer", [addr(seller), "Sticker"], price);
+    await asPayee(p, "BazaarOffers", "cancelOffer", [0n]);
+    eq(await vread("BazaarOffers", "owed", [p.address]), price, "offer refund owed");
+    const due = BigInt((await node.pub.getBlock()).timestamp) + 3n * BigInt(DAY);
+    await send(buyer, vat("BazaarRequests"), "post", ["Job", "", 0, due], price);
+    await send(buyer, vat("BazaarRequests"), "assign", [0n, p.address]);
+    await asPayee(p, "BazaarRequests", "submit", [0n, "ipfs://r"]);
+    await send(buyer, vat("BazaarRequests"), "accept", [0n]);
+    eq(await vread("BazaarRequests", "owed", [p.address]), price, "reward owed");
+    await asPayee(p, "BazaarRequests", "post", ["Job 2", "", 0, due], price);
+    await asPayee(p, "BazaarRequests", "cancel", [1n]);
+    eq(await vread("BazaarRequests", "owed", [p.address]), 2n * price, "returned reward owed");
+    await send(deployer, p, "setMode", [0]);
+    await asPayee(p, "BazaarRequests", "withdraw");
+    await asPayee(p, "BazaarOffers", "withdraw");
+    eq(await node.pub.getBalance({ address: p.address }), 3n * price, "all withdrawn");
+  });
+  await check("L-2 releaseMany skips unknown ids and settles the rest", async () => {
+    await send(seller, vat("BazaarMarket"), "list", ["Pin", price]);
+    await send(buyer, vat("BazaarMarket"), "buy", [addr(seller), "Pin"], price);
+    await node.increaseTime(DAY + 1);
+    await send(other, vat("BazaarMarket"), "releaseMany", [[2n, 99n]]);
+    eq((await vread("BazaarMarket", "purchaseOf", [2n]))[4], true, "settled");
+  });
+  await check("L-3 buyItem refuses when the item at that index changed", async () => {
+    await send(seller, vat("BazaarMarket"), "openShop", ["Shop", "", 0, 0, [{ name: "A", price }]]);
+    await send(seller, vat("BazaarMarket"), "openShop", ["Shop", "", 0, 0, [{ name: "B", price }]]);
+    await vreverts(buyer, "BazaarMarket", "buyItem", [addr(seller), 0, "A"], price, "item changed");
+    await send(buyer, vat("BazaarMarket"), "buyItem", [addr(seller), 0, "B"], price);
+  });
+  await check("L-4 a buyer cannot dispute after the 24 h deadline", async () => {
+    const id = (await vread("BazaarMarket", "purchaseCount")) - 1n;
+    await node.increaseTime(DAY + 1);
+    await vreverts(buyer, "BazaarMarket", "dispute", [id], undefined, "late");
+    await send(other, vat("BazaarMarket"), "release", [id]);
+  });
+  await check("L-6 a principal cancels a signed permission nobody used yet", async () => {
+    const deadline = BigInt((await node.pub.getBlock()).timestamp) + 3600n;
+    const sig = await principal.signTypedData({
+      domain: { name: "BotBazaarAgentPass", version: "1", chainId: 677, verifyingContract: v.AgentPass.address },
+      types: { Link: [{ name: "agent", type: "address" }, { name: "principal", type: "address" }, { name: "nonce", type: "uint256" }, { name: "deadline", type: "uint256" }] },
+      primaryType: "Link",
+      message: { agent: addr(agent), principal: principal.address, nonce: 0n, deadline },
+    });
+    await send(deployer, vat("AgentPass"), "cancelPermissions");
+    await vreverts(agent, "AgentPass", "link", [principal.address, deadline, ...split(sig)], undefined, "bad sig");
+    eq(await vread("AgentPass", "nonces", [principal.address]), 1n);
+  });
+  await check("every v1 escrow contract holds exactly what it still owes", async () => {
+    // Market: unsettled purchases + credited payouts; offers and requests: credited payouts only here.
+    let open = 0n;
+    for (let i = 0n; i < (await vread("BazaarMarket", "purchaseCount")); i++) {
+      const p = await vread("BazaarMarket", "purchaseOf", [i]);
+      if (!p[4]) open += p[2];
+    }
+    eq(await node.pub.getBalance({ address: v.BazaarMarket.address }), open + (await vread("BazaarMarket", "totalOwed")), "market");
+    eq(await node.pub.getBalance({ address: v.BazaarOffers.address }), await vread("BazaarOffers", "totalOwed"), "offers");
+    eq(await node.pub.getBalance({ address: v.BazaarRequests.address }), await vread("BazaarRequests", "totalOwed"), "requests");
+  });
 }
 
 node.stop();

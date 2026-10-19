@@ -14,6 +14,8 @@ conformance, hardening.
 
 No High or Medium findings. Nothing found blocks the capped 0.1 mainnet deployment.
 
+> Fixed in version 1.0 (`contracts-v1/`, testnet first): L-1, L-2, L-3, L-4, L-6; L-5 kept as documented behaviour. See [v1.md](v1.md).
+
 | ID | Severity | Title | Location |
 |---|---|---|---|
 | L-1 | Low | A payee that rejects BOT blocks its own payout; the counterparty cannot force the other outcome | BazaarMarket.sol:454, 444 · BazaarRequests.sol:195, 202 · BazaarOffers.sol:75 |

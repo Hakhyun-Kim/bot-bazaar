@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { concat, createPublicClient, createWalletClient, formatEther, http, keccak256, parseEther, toHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ROOT, compileAll } from "./lib/compile.mjs";
+import { ROOT, compileAll, compileV1 } from "./lib/compile.mjs";
 import { chainOf } from "./lib/networks.mjs";
 
 const argv = process.argv.slice(2);
@@ -46,7 +46,9 @@ const dep = JSON.parse(fs.readFileSync(depFile, "utf8"));
 for (const n of ["BazaarMarket", "BazaarOffers", "BazaarRequests", "BazaarProjects", "AgentPass", "BotOrNot"]) {
   if (!dep.contracts[n]) throw new Error(`no ${n} in ${depFile}`);
 }
-const artifacts = compileAll();
+// A version 1.0 set (deployments/v1/<id>.json) uses the contracts-v1/ ABIs.
+const V1 = dep.version === "1.0";
+const artifacts = V1 ? compileV1() : compileAll();
 const at = (name) => ({ address: dep.contracts[name].address, abi: artifacts[name].abi });
 
 const seller = createWalletClient({ chain, transport, account: privateKeyToAccount(key) });
@@ -104,7 +106,7 @@ try {
   await send("Open a shop in that project, one item at the cap", "seller", seller, "BazaarMarket", "openShop", [
     "BOT Bazaar core-flow test", "", Number(projectId), 0, [{ name: ITEM, price }],
   ]);
-  const p1 = await send("Buy the shop item (BOT held in escrow)", "buyer", buyer, "BazaarMarket", "buyItem", [S, 0], price);
+  const p1 = await send("Buy the shop item (BOT held in escrow)", "buyer", buyer, "BazaarMarket", "buyItem", V1 ? [S, 0, ITEM] : [S, 0], price);
   await send("Buyer confirms: seller paid, receipt to buyer", "buyer", buyer, "BazaarMarket", "confirm", [p1]);
 
   const o1 = await send("Make an offer below the price (BOT locked)", "buyer", buyer, "BazaarOffers", "makeOffer", [S, ITEM], half);
@@ -167,7 +169,7 @@ if (out) {
     [
       `# Core flows on ${chain.name} (${chain.id})`,
       "",
-      `One run of every core flow of the market modules (test version 0.1, cap ${formatEther(cap)} BOT per action),`,
+      `One run of every core flow of the market modules (test version ${V1 ? "1.0" : "0.1"}, cap ${formatEther(cap)} BOT per action),`,
       `made with \`scripts/core-flows.mjs\` on ${new Date().toISOString().slice(0, 10)}.`,
       "",
       `- seller: the deployer ${addr(S)}`,

@@ -5,6 +5,11 @@
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network mainnet --only PixelWorkshop --yes
 //
 //   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network mainnet --add-market --max-amount 0.001 --yes
+//   DEPLOYER_KEY=0x... node scripts/deploy.mjs --network testnet --v1 --max-amount 0.001 --yes
+//
+// --v1 deploys version 1.0 (the Low findings fixed, contracts-v1/) as a separate set of six (no
+// workshop) and writes deployments/v1/<chainId>.json; the site keeps using deployments/<id>.json.
+// Testnet only until the owner decides on a mainnet 1.0.
 //
 // --add-market deploys the other six onto a chain whose deployments/<id>.json already has a
 // PixelWorkshop, and merges them into that file. --max-amount (in BOT) caps every purchase, offer
@@ -20,7 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createPublicClient, createWalletClient, formatEther, http, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ROOT, SETTINGS, SOLC_VERSION, compileAll } from "./lib/compile.mjs";
+import { ROOT, SETTINGS, SOLC_VERSION, compileAll, compileV1 } from "./lib/compile.mjs";
 import { deployAll, deployOne } from "./lib/localchain.mjs";
 import { NETWORKS, chainOf } from "./lib/networks.mjs";
 
@@ -34,6 +39,11 @@ const yes = argv.includes("--yes");
 const only = opt("--only");
 const addMarket = argv.includes("--add-market");
 const maxAmount = opt("--max-amount") ? parseEther(opt("--max-amount")) : 0n;
+const v1 = argv.includes("--v1");
+if (v1 && (network === "mainnet" || only || addMarket)) {
+  console.error("--v1 deploys a separate six-contract set on testnet (or local) only. Stopping.");
+  process.exit(1);
+}
 if (network === "mainnet" && !only && maxAmount === 0n) {
   console.error("Mainnet market contracts need --max-amount until they are audited (e.g. --max-amount 0.001). Stopping.");
   process.exit(1);
@@ -73,7 +83,7 @@ if (rpcId !== chain.id) {
   console.error(`RPC reports chain ${rpcId}, expected ${chain.id} (${chain.name}). Stopping.`);
   process.exit(1);
 }
-const file = path.join(ROOT, "deployments", `${chain.id}.json`);
+const file = path.join(ROOT, "deployments", ...(v1 ? ["v1"] : []), `${chain.id}.json`);
 const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
 if (addMarket) {
   if (!existing?.contracts?.PixelWorkshop) {
@@ -88,8 +98,8 @@ if (addMarket) {
   console.error(`${path.relative(ROOT, file)} exists. Pass --force to deploy a fresh set.`);
   process.exit(1);
 }
-const all = compileAll();
-const artifacts = only ? { [only]: all[only] } : addMarket ? Object.fromEntries(Object.entries(all).filter(([n]) => n !== "PixelWorkshop")) : all;
+const all = v1 ? compileV1() : compileAll();
+const artifacts = only ? { [only]: all[only] } : addMarket || v1 ? Object.fromEntries(Object.entries(all).filter(([n]) => n !== "PixelWorkshop")) : all;
 const bal = await pub.getBalance({ address: account.address });
 console.log(`${chain.name} (${chain.id}) · deployer ${account.address} · ${formatEther(bal)} BOT`);
 for (const [n, a] of Object.entries(artifacts)) console.log(`  ${n.padEnd(15)} ${(a.size / 1024).toFixed(1)} KB`);
@@ -99,7 +109,7 @@ if (bal === 0n) {
   process.exit(1);
 }
 if (!yes) {
-  console.log(`\nDry run. Add --yes to broadcast ${only ? `the ${only} deployment` : addMarket ? "six deployments" : "seven deployments"}.`);
+  console.log(`\nDry run. Add --yes to broadcast ${only ? `the ${only} deployment` : addMarket || v1 ? "six deployments" : "seven deployments"}.`);
   process.exit(0);
 }
 const log = (l) => console.log(`  ${l}`);
@@ -107,7 +117,7 @@ const log = (l) => console.log(`  ${l}`);
 const freeOnly = network === "mainnet";
 const contracts = only
   ? await deployOne({ pub, wallet, artifacts, name: only, args: [freeOnly], log })
-  : await deployAll({ pub, wallet, artifacts, freeOnly, maxAmount, skipWorkshop: addMarket, log });
+  : await deployAll({ pub, wallet, artifacts, freeOnly, maxAmount, skipWorkshop: addMarket || v1, log });
 const record = addMarket ? {
   ...existing,
   maxAmount: maxAmount.toString(),
@@ -116,6 +126,7 @@ const record = addMarket ? {
 } : {
   chainId: chain.id,
   network,
+  ...(v1 ? { version: "1.0", sources: "contracts-v1/ (BazaarMarket, BazaarOffers, BazaarRequests, AgentPass) + contracts/" } : {}),
   freeOnly,
   ...(maxAmount ? { maxAmount: maxAmount.toString() } : {}),
   deployer: account.address,
@@ -125,7 +136,7 @@ const record = addMarket ? {
 };
 fs.mkdirSync(path.dirname(file), { recursive: true });
 fs.writeFileSync(file, JSON.stringify(record, null, 2) + "\n");
-console.log(`\nwrote ${path.relative(ROOT, file)} — commit it so the web client picks it up.`);
+console.log(`\nwrote ${path.relative(ROOT, file)} — commit it${v1 ? "" : " so the web client picks it up"}.`);
 if (chain.blockExplorers) {
   console.log(`explorer: ${chain.blockExplorers.default.url}/address/${Object.values(contracts)[0].address}`);
 }

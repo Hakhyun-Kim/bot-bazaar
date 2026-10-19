@@ -11,6 +11,7 @@ Prepared 2026-10-14. This is an internal review and a static-analysis pass, not 
 | [internal-review.md](internal-review.md) | manual review of the money paths, findings, invariants |
 | [test-results.md](test-results.md) | latest `npm test` / `npm run test:local` / explorer bytecode check results |
 | [mainnet-core-flows.md](mainnet-core-flows.md) | one mainnet run of every core flow with transaction links (`scripts/core-flows.mjs`) |
+| [v1.md](v1.md) | version 1.0 (`contracts-v1/`): each Low finding and its fix, tests, testnet deployment |
 
 ## Scope
 

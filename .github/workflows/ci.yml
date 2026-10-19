@@ -22,6 +22,7 @@ jobs:
       # Invariant fuzzing: random actions by four wallets with time jumps; BOT conserved and every
       # contract holds exactly what it owes after each step. A few seeds per push.
       - run: for s in 1 2 3; do npm run test:fuzz -- 500 $s || exit 1; done
+      - run: for s in 4 5; do npm run test:fuzz -- 500 $s --v1 || exit 1; done
   slither:
     runs-on: ubuntu-latest
     steps:

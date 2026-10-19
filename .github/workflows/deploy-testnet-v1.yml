@@ -1,0 +1,44 @@
+name: deploy-testnet-v1
+# Deploys version 1.0 (Low findings L-1..L-4 and L-6 fixed, contracts-v1/) to BOT Chain testnet
+# (968) as a separate six-contract set with the mainnet cap (0.001 BOT per action), runs every core
+# flow on it once, and commits deployments/v1/968.json and docs/audit/v1-testnet-core-flows.md.
+# Test BOT only. The site keeps using deployments/968.json (version 0.1).
+on:
+  workflow_dispatch:
+    inputs:
+      broadcast:
+        description: "Broadcast (unchecked = dry run: chain id, deployer, balance, sizes)"
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: deploy-testnet
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Deploy version 1.0 to testnet
+        env:
+          DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+        run: node scripts/deploy.mjs --network testnet --v1 --max-amount 0.001 ${{ inputs.broadcast && '--yes' || '' }}
+      - name: Run the core flows on it
+        if: inputs.broadcast
+        env:
+          DEPLOYER_KEY: ${{ secrets.DEPLOYER_KEY }}
+        run: node scripts/core-flows.mjs --network testnet --deployment deployments/v1/968.json --out docs/audit/v1-testnet-core-flows.md --yes
+      - name: Commit the deployment record and the transaction table
+        if: always() && inputs.broadcast
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deployments/v1/968.json docs/audit/v1-testnet-core-flows.md || true
+          git commit -m "Deploy version 1.0 to BOT Chain testnet (968) and run the core flows" -m "From the deploy-testnet-v1 workflow, run ${GITHUB_RUN_ID}."
+          git pull --rebase origin main
+          git push origin HEAD:main

@@ -5,3 +5,4 @@ deployments/31337.json
 deployments/standard-input.json
 .env
 *.key
+deployments/v1/31337.json

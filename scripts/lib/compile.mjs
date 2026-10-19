@@ -21,6 +21,11 @@ export const CONTRACTS = [
 /** The sponsor's gas tank is not one of the shared contracts: compiled on its own, so the seven
  *  keep their verified standard input byte for byte. */
 export const SPONSOR = ["GasTank"];
+/** Version 1.0 (testnet first): the four contracts with the Low findings fixed live in
+ *  contracts-v1/, so the deployed and verified 0.1 sources in contracts/ never change. The other
+ *  three are unchanged and come from contracts/. */
+export const V1 = ["BazaarMarket", "BazaarOffers", "BazaarRequests", "AgentPass"];
+export const V1_DIR = "contracts-v1";
 
 export const SETTINGS = {
   evmVersion: "paris",
@@ -28,22 +33,22 @@ export const SETTINGS = {
   outputSelection: { "*": { "*": ["abi", "evm.bytecode.object", "evm.deployedBytecode.object"] } },
 };
 
-export function standardInput(names = CONTRACTS) {
+export function standardInput(names = CONTRACTS, dir = "contracts") {
   const sources = {};
   for (const n of names) {
-    sources[`contracts/${n}.sol`] = {
-      content: fs.readFileSync(path.join(ROOT, "contracts", `${n}.sol`), "utf8"),
+    sources[`${dir}/${n}.sol`] = {
+      content: fs.readFileSync(path.join(ROOT, dir, `${n}.sol`), "utf8"),
     };
   }
   return { language: "Solidity", sources, settings: SETTINGS };
 }
 
-export function compileAll(names = CONTRACTS) {
+export function compileAll(names = CONTRACTS, dir = "contracts") {
   const solc = require("solc");
   if (!solc.version().startsWith(SOLC_VERSION)) {
     throw new Error(`solc ${solc.version()} found, ${SOLC_VERSION} expected (npm ci)`);
   }
-  const input = standardInput(names);
+  const input = standardInput(names, dir);
   // Immutable positions too, so verify-explorer.mjs can compare on-chain code byte for byte.
   input.settings = { ...input.settings, outputSelection: { "*": { "*": [...SETTINGS.outputSelection["*"]["*"], "evm.deployedBytecode.immutableReferences"] } } };
   const out = JSON.parse(solc.compile(JSON.stringify(input)));
@@ -51,7 +56,7 @@ export function compileAll(names = CONTRACTS) {
   if (errors.length) throw new Error(errors.map((e) => e.formattedMessage).join("\n"));
   const artifacts = {};
   for (const n of names) {
-    const c = out.contracts[`contracts/${n}.sol`][n];
+    const c = out.contracts[`${dir}/${n}.sol`][n];
     artifacts[n] = {
       abi: c.abi,
       bytecode: `0x${c.evm.bytecode.object}`,
@@ -61,4 +66,9 @@ export function compileAll(names = CONTRACTS) {
     };
   }
   return artifacts;
+}
+
+/** All seven as version 1.0 deploys them: the fixed four from contracts-v1/, the rest unchanged. */
+export function compileV1() {
+  return { ...compileAll(CONTRACTS.filter((n) => !V1.includes(n))), ...compileAll(V1, V1_DIR) };
 }

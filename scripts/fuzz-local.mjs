@@ -2,7 +2,10 @@
 // contracts that hold BOT (market escrow, offers, requests), with random time jumps, checking after
 // every step that no BOT is created or lost and that each contract holds exactly what it owes.
 //
-//   node scripts/fuzz-local.mjs [steps=1500] [seed=1]
+//   node scripts/fuzz-local.mjs [steps=1500] [seed=1] [--v1]
+//
+// --v1 runs version 1.0 (contracts-v1/), where a failed payout is credited to `owed` instead of
+// reverting; the balance checks then include each contract's totalOwed.
 //
 // Invariants, after every action (a reverted action changes nothing and is skipped):
 //   1. Conservation: wallets + contracts + gas paid = the starting total.
@@ -11,11 +14,13 @@
 //   4. BazaarRequests balance = sum of rewards of requests not yet paid or returned.
 //   5. A settled purchase, a closed offer, a paid or returned request never reopens.
 import { parseEther } from "viem";
-import { compileAll } from "./lib/compile.mjs";
+import { compileAll, compileV1 } from "./lib/compile.mjs";
 import { ANVIL_KEYS, ANVIL_MISSING, deployAll, startChain } from "./lib/localchain.mjs";
 
-const STEPS = Number(process.argv[2] || 1500);
-let seed = Number(process.argv[3] || 1);
+const V1 = process.argv.includes("--v1");
+const [stepsArg, seedArg] = process.argv.slice(2).filter((a) => a !== "--v1");
+const STEPS = Number(stepsArg || 1500);
+let seed = Number(seedArg || 1);
 const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
 const pick = (a) => a[Math.floor(rand() * a.length)];
 const int = (n) => Math.floor(rand() * n);
@@ -25,7 +30,7 @@ if (!node) {
   console.log(ANVIL_MISSING);
   process.exit(0);
 }
-const artifacts = compileAll();
+const artifacts = V1 ? compileV1() : compileAll();
 const wallets = ANVIL_KEYS.map((k) => node.wallet(k));
 const d = await deployAll({ pub: node.pub, wallet: wallets[0], artifacts });
 const at = (n) => ({ address: d[n].address, abi: artifacts[n].abi });
@@ -107,10 +112,11 @@ const closed = { p: new Set(), o: new Set(), r: new Set() };
 
 async function check(step) {
   const fail = (m) => {
-    throw new Error(`step ${step} (seed ${process.argv[3] || 1}): ${m}`);
+    throw new Error(`step ${step} (seed ${seedArg || 1}${V1 ? ", v1" : ""}): ${m}`);
   };
   if ((await total()) + gas !== start) fail("conservation: BOT created or lost");
-  let owed = 0n;
+  const credited = async (n) => (V1 ? await read(n, "totalOwed") : 0n);
+  let owed = await credited("BazaarMarket");
   for (let i = 0; i < n.p; i++) {
     const [, , amount, , settled] = await read("BazaarMarket", "purchaseOf", [BigInt(i)]);
     if (settled) closed.p.add(i);
@@ -118,7 +124,7 @@ async function check(step) {
     else owed += amount;
   }
   if ((await bal(d.BazaarMarket.address)) !== owed) fail(`market holds ${await bal(d.BazaarMarket.address)}, owes ${owed}`);
-  owed = 0n;
+  owed = await credited("BazaarOffers");
   for (let i = 0; i < n.o; i++) {
     const o = await read("BazaarOffers", "offerAt", [BigInt(i)]);
     if (!o.active) closed.o.add(i);
@@ -126,7 +132,7 @@ async function check(step) {
     else owed += o.amount;
   }
   if ((await bal(d.BazaarOffers.address)) !== owed) fail(`offers hold ${await bal(d.BazaarOffers.address)}, owe ${owed}`);
-  owed = 0n;
+  owed = await credited("BazaarRequests");
   for (let i = 0; i < n.r; i++) {
     const r = await read("BazaarRequests", "requestAt", [BigInt(i)]);
     if (r.state >= 3) closed.r.add(i);
@@ -157,5 +163,5 @@ try {
 node.stop();
 const names = ["buy", "confirm", "release", "dispute", "refund", "releaseMany", "makeOffer", "cancelOffer", "acceptOffer",
   "post", "assign", "cancel", "submit", "accept", "dispute(req)", "handBack", "release(req)", "reclaim", "time jump"];
-console.log(`${STEPS} steps, all invariants held (${((Date.now() - t0) / 1000).toFixed(0)} s). ${n.p} purchases, ${n.o} offers, ${n.r} requests.`);
+console.log(`${V1 ? "v1.0: " : ""}${STEPS} steps, all invariants held (${((Date.now() - t0) / 1000).toFixed(0)} s). ${n.p} purchases, ${n.o} offers, ${n.r} requests.`);
 console.log("succeeded:", names.map((x, i) => `${x} ${done.get(i) || 0}`).join(", "));
