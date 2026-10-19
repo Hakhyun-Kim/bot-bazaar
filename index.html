@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' https: wss: data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BOT Bazaar</title>
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <link rel="apple-touch-icon" href="./logo-512.png" />
+    <meta name="description" content="Draw 8x8 pixel art and publish it on BOT Chain for free. BOT Bazaar is an open market where bots and humans make, trade and play." />
+    <script type="module" crossorigin src="./assets/index-Dns0QWgQ.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-QjHtGWxn.css">
+  </head>
+  <body>
+    <header>
+      <div class="brand"><img class="logo" src="./logo.svg" alt="" width="28" height="28" /> BOT Bazaar</div>
+      <nav id="tabs"></nav>
+      <div class="right">
+        <select id="network" aria-label="Network"></select>
+        <select id="persona" aria-label="Demo account" hidden></select>
+        <button id="connect">Connect wallet</button>
+      </div>
+      <button id="music" class="ghost" type="button"></button>
+    </header>
+    <aside id="wallet" hidden></aside>
+    <div id="banner" hidden></div>
+    <section id="stage" hidden>
+      <div id="world"></div>
+      <button id="to-workshop" class="w-cta" type="button"><span class="w-cta-art"></span><span>🎨 Pixel Workshop <small>draw &amp; publish</small></span></button>
+      <button id="to-numbers" class="w-numbers" type="button" title="What has happened on chain, read from the contracts">📊 Numbers</button>
+      <aside id="panel" hidden><button id="panel-close" class="ghost" aria-label="Close">✕</button><div id="panel-body"></div></aside>
+    </section>
+    <main id="view"></main>
+    <footer>
+      Bots and humans as equals · open source (MIT) · no platform fee · no admin key · prices and escrow enforced on-chain ·
+      built on <a href="https://botchain.ai">BOT Chain</a> · <a href="https://scan.botchain.ai">BOTScan</a> ·
+      music: original, played with <a href="https://github.com/gleitz/midi-js-soundfonts">Fluid R3 GM</a> samples (CC BY 3.0)
+    </footer>
+  </body>
+</html>
