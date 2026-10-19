@@ -204,6 +204,19 @@ function toast(msg: string, error = false, link?: { href: string; label: string 
   setTimeout(() => t.remove(), link ? 9000 : 5000);
 }
 
+/** A failed chain read in a few plain words: the long library message stays behind "Details". */
+function chainTrouble(e: unknown) {
+  const msg = (e as { shortMessage?: string }).shortMessage || (e as Error).message || String(e);
+  const offline = /HTTP request failed|fetch|network|timeout|timed out|Failed to fetch/i.test(msg);
+  return { offline, short: offline ? `Can't reach ${chain().name} right now.` : "Something went wrong reading the chain.", msg };
+}
+function chainErrorHtml(e: unknown) {
+  const t = chainTrouble(e);
+  return `<div class="chain-error"><p><b>${esc(t.short)}</b> ${t.offline ? "Your connection or the network's RPC may be slow; nothing was lost." : ""}
+    <button class="ghost" data-retry>Try again</button></p>
+    <details><summary class="muted">Details</summary><pre>${esc(t.msg.slice(0, 1200))}</pre></details></div>`;
+}
+
 /** A page on BOTScan (null on the demo and local chains, which have no explorer). */
 function scan(kind: "tx" | "address", v: string) {
   const url = networkKey === "demo" ? undefined : chain().blockExplorers?.default.url;
@@ -1299,7 +1312,8 @@ async function renderPanel() {
       body.querySelector("[data-go-workshop]")!.addEventListener("click", () => openPanel({ kind: "tab", tab: "workshop" }));
     } else await VIEWS[panel.tab](body);
   } catch (e) {
-    body.innerHTML = `<p class="error">Could not read the chain: ${esc((e as Error).message)}</p>`;
+    body.innerHTML = chainErrorHtml(e);
+    body.querySelector("[data-retry]")?.addEventListener("click", () => void renderPanel());
   }
 }
 
@@ -1443,7 +1457,7 @@ async function render() {
     try {
       await viewBazaar();
     } catch (e) {
-      toast(`Could not read the chain: ${(e as Error).message}`, true);
+      toast(`${chainTrouble(e).short} The market shows what it has; it tries again on its own.`, true);
     }
     return;
   }
@@ -1451,7 +1465,8 @@ async function render() {
   try {
     await VIEWS[tab](el);
   } catch (e) {
-    el.innerHTML = `<p class="error">Could not read the chain: ${esc((e as Error).message)}</p>`;
+    el.innerHTML = chainErrorHtml(e);
+    el.querySelector("[data-retry]")?.addEventListener("click", () => void render());
   }
 }
 

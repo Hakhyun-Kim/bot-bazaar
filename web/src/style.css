@@ -249,3 +249,5 @@ figure button.share { padding: 2px 8px; margin-left: 4px; }
 @media (max-width: 640px) { .w-numbers { top: 12px; right: 8px; font-size: 13px; } }
 table.numbers td:not(:first-child), table.numbers th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
 table.numbers a { text-decoration: none; }
+.chain-error { padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--panel); }
+.chain-error pre { white-space: pre-wrap; word-break: break-all; font-size: 11px; max-height: 160px; overflow: auto; }
