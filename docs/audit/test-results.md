@@ -8,6 +8,8 @@ Reproduce from a fresh clone with `npm ci && npm run compile && npm test && npm 
 |---|---|---|
 | `npm test` | Pure logic and repository guards (network tables agree, 3D market is the first screen) | 7 / 7 pass |
 | `npm run test:local` | Every contract path on a local chain, including the capped mainnet configuration | 39 / 39 pass |
+| `npm run test:fuzz -- <steps> <seed>` | Invariant fuzzing of the three contracts that hold BOT: random actions by four wallets with time jumps; after every step BOT is conserved, each contract holds exactly what it owes, nothing settled reopens | 2000 steps seed 7: all invariants held, all 18 action kinds succeeded at least once (113 purchases, 67 offers, 113 requests). CI: 500 steps × seeds 1–3 on every push |
+| `npm run slither` | Slither over all of `contracts/` incl. GasTank; fails on unreviewed High/Medium | 59 results, 3 High/Medium all reviewed false positives (CI on every push) |
 | `npm run verify -- --network mainnet` | On-chain code of all seven mainnet contracts equals this build (immutables masked) | 7 / 7 match, all source-verified on BOTScan |
 
 The last block of `test:local` deploys exactly what mainnet runs (six contracts, cap 0.001 BOT,

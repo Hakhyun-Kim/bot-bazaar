@@ -53,7 +53,9 @@ export async function chainNumbers(read: Read, has: (c: string) => boolean, team
     rows.push({ key: "offers", label: "Offers made", total: n, team: buyers.filter(isTeam).length, ...checked(n) });
   }
   if (has("BazaarRequests")) {
-    rows.push({ key: "requests", label: "Requests posted", total: Number(await read<bigint>("BazaarRequests", "requestCount")), team: null });
+    const n = Number(await read<bigint>("BazaarRequests", "requestCount"));
+    const posters = await each(n, 0, (i) => read<{ poster: Address }>("BazaarRequests", "requestAt", [BigInt(i)]).then((r) => r.poster));
+    rows.push({ key: "requests", label: "Requests posted", total: n, team: posters.filter(isTeam).length, ...checked(n) });
   }
   if (has("BazaarProjects")) {
     const n = Number(await read<bigint>("BazaarProjects", "projectCount"));

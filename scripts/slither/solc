@@ -1,0 +1,4 @@
+#!/bin/sh
+# A `solc` command for Slither (crytic-compile) backed by the repo's npm solc, so static analysis
+# compiles with exactly the compiler and settings of scripts/lib/compile.mjs and needs no download.
+exec node "$(dirname "$0")/solc.mjs" "$@"

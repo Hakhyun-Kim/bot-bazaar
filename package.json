@@ -9,6 +9,8 @@
     "compile": "node scripts/compile.mjs",
     "test": "node --test test/logic.test.mjs",
     "test:local": "node scripts/test-local.mjs",
+    "test:fuzz": "node scripts/fuzz-local.mjs",
+    "slither": "node scripts/slither-check.mjs",
     "chain": "node scripts/dev-chain.mjs",
     "deploy": "node scripts/deploy.mjs",
     "verify-input": "node scripts/verify-input.mjs",

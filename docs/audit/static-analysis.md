@@ -1,5 +1,29 @@
 # Static analysis
 
+## In CI (since 2026-10-19)
+
+Every push runs Slither over **all** of `contracts/` (the seven deployed contracts plus `GasTank`)
+in the `slither` job of `.github/workflows/ci.yml`: `npm run slither` (`scripts/slither-check.mjs`).
+It compiles through `scripts/slither/solc`, a small `solc` command backed by the repo's npm solc
+with the settings of `scripts/lib/compile.mjs`, so no compiler download is needed and the analysed
+bytecode settings match the deployed ones. The job **fails on any High or Medium result** that is
+not one of the three reviewed false positives listed in the script (`REVIEWED`) and below.
+
+Run on 2026-10-19 (Slither 0.11.3, 11 contracts incl. interfaces, 100 detectors): 59 results,
+High 2, Medium 1, Low 45, Informational 11; no unreviewed High or Medium.
+
+### GasTank results
+
+| Detector | Hits | Verdict | Reason |
+|---|---:|---|---|
+| `incorrect-equality` (Medium) | 1 | False positive | `refusal` compares `block.timestamp / 1 days == day`, two day numbers, to reset the daily cap. The "dangerous strict equality" pattern is about balances someone can push; nobody can make a day number skip. |
+| `missing-zero-check` | 3 | By design | `relayer = 0` is the documented pause; `drip(0)` cannot pass `refusal` twice and only the relayer can call it. |
+| `reentrancy-events` | 2 | Info | `dripped[to]`, `dripCount` and the cap are written before the call; reentry can only reorder events. `withdraw` is owner-only and sends to the owner. |
+| `timestamp` | 2 | By design | Day buckets for the daily cap; a few seconds of drift only moves the reset by seconds. |
+| `low-level-calls` | 2 | By design | `.call{value}` with `ok` checked, as in the other contracts. |
+
+The rest of this page is the first, manual run on the seven contracts (commit `5ed0a86`).
+
 ## Tool and environment
 
 | Item | Version |
@@ -89,6 +113,8 @@ are L-2 (`releaseMany` batch revert) and I-3 (ERC-1155 batch hook).
 
 ## Not run
 
-- Mythril / symbolic execution, Echidna / Foundry fuzzing and invariant testing (no `forge` in the
-  environment). The invariants listed in internal-review.md are good starting properties for an
-  auditor's fuzzing campaign.
+- Mythril / symbolic execution and Echidna / Foundry fuzzing (no `forge` in the environment).
+- Invariant testing is covered since 2026-10-19 by `scripts/fuzz-local.mjs` (`npm run test:fuzz`,
+  three seeds in CI on every push): random buys, confirms, releases, disputes, refunds, offers and
+  requests by four wallets with time jumps, checking after every step that BOT is conserved and that
+  each escrow contract holds exactly what it owes. See [test-results.md](test-results.md).

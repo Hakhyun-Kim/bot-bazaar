@@ -111,6 +111,7 @@ test("public numbers count team test wallets apart and never pad players", async
     "BazaarMarket.purchaseCount": () => 2n,
     "BazaarMarket.purchaseOf": ([id]) => [id === 0n ? team : p1],
     "BazaarRequests.requestCount": () => 2n,
+    "BazaarRequests.requestAt": ([id]) => ({ poster: id === 0n ? team : p1 }),
   };
   const read = async (c, f, a) => fake[`${c}.${f}`](a ?? []);
   const rows = await chainNumbers(read, (c) => ["PixelWorkshop", "BazaarMarket", "BazaarRequests"].includes(c), [team]);
@@ -119,6 +120,7 @@ test("public numbers count team test wallets apart and never pad players", async
   assert.deepEqual([by.artists.total, byPlayers(by.artists)], [2, 1]);
   assert.equal(by.collected.total, 3);
   assert.equal(byPlayers(by.purchases), 1);
-  assert.equal(byPlayers(by.requests), null, "no per-item read: no player figure is guessed");
+  assert.equal(byPlayers(by.requests), 1);
+  assert.equal(byPlayers(by.collected), null, "no per-item read: no player figure is guessed");
   assert.equal(by.offers, undefined, "a contract the network lacks gives no row");
 });

@@ -19,3 +19,21 @@ jobs:
       - run: npm i @foundry-rs/anvil --ignore-scripts --no-save
       - run: npm run test:local
       - run: npm run build
+      # Invariant fuzzing: random actions by four wallets with time jumps; BOT conserved and every
+      # contract holds exactly what it owes after each step. A few seeds per push.
+      - run: for s in 1 2 3; do npm run test:fuzz -- 500 $s || exit 1; done
+  slither:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: pip install slither-analyzer==0.11.3
+      # Fails on any High/Medium result not reviewed in docs/audit/static-analysis.md.
+      - run: npm run slither
