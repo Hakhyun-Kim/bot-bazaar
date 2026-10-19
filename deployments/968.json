@@ -47,5 +47,8 @@
       "tx": "0xe9a19169b882481413fe8e6cd6b3da30b68eb875c776d9570f4c4b9cf1d473bb",
       "block": 26484864
     }
-  }
+  },
+  "team": [
+    "0x7cfD8d742C58D9e43A5AA20E8A786A2D193655B3"
+  ]
 }

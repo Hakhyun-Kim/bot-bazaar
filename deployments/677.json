@@ -50,5 +50,9 @@
     }
   },
   "maxAmount": "1000000000000000",
-  "marketDeployedAt": "2026-10-14T22:04:06.400Z"
+  "marketDeployedAt": "2026-10-14T22:04:06.400Z",
+  "team": [
+    "0x7cfD8d742C58D9e43A5AA20E8A786A2D193655B3",
+    "0x5ff8d698416a825C1a533566D7e9Da06fcA350D3"
+  ]
 }

@@ -8,6 +8,7 @@ import {
   getAddress,
   http,
   isAddress,
+  parseAbi,
   parseEther,
   parseEventLogs,
   type Log,
@@ -1168,7 +1169,9 @@ async function viewBotOrNot(el: HTMLElement) {
 // ---------- the bazaar as a place (src/world/World.tsx) ----------
 let world: WorldApi | null = null;
 let workshopShown = false;
-let panel: Target | null = null;
+// The market's panel shows a shop, a tab, or the public numbers (numbers.ts).
+type PanelTarget = Target | { kind: "numbers" };
+let panel: PanelTarget | null = null;
 const shopCache = new Map<Address, ShopData & { owner: Address }>();
 
 const FEED_PAGE = 48;
@@ -1256,7 +1259,7 @@ setInterval(async () => {
   }
 }, 30_000);
 
-function openPanel(t: Target) {
+function openPanel(t: PanelTarget) {
   panel = t;
   if (t.kind === "tab" && t.tab === "workshop") {
     world?.errand("draw");
@@ -1274,7 +1277,9 @@ async function renderPanel() {
   const body = $("#panel-body");
   body.innerHTML = "<p class='muted'>Loading…</p>";
   try {
-    if (panel.kind === "shop") {
+    if (panel.kind === "numbers") {
+      await viewNumbers(body);
+    } else if (panel.kind === "shop") {
       const s = shopCache.get(panel.owner as Address);
       if (!s) {
         body.innerHTML = "<p>This shop has closed.</p>";
@@ -1296,6 +1301,38 @@ async function renderPanel() {
   } catch (e) {
     body.innerHTML = `<p class="error">Could not read the chain: ${esc((e as Error).message)}</p>`;
   }
+}
+
+/** What has happened on chain, read straight from the contracts. Team test wallets count apart. */
+async function viewNumbers(body: HTMLElement) {
+  const { chainNumbers, byPlayers, MAX_ITEMS } = await import("./numbers");
+  const team = dep?.team ?? [];
+  const [rows, block] = await Promise.all([
+    chainNumbers((n, f, a) => read(n as Name, f, a), (n) => !!dep?.contracts[n as Name], team),
+    pub.getBlockNumber(),
+  ]);
+  if (dep?.sponsor) {
+    const drips = await pub.readContract({ address: dep.sponsor.tank, abi: parseAbi(["function dripCount() view returns (uint256)"]), functionName: "dripCount" }).catch(() => null);
+    if (drips !== null) rows.push({ key: "freegas", label: "New players started on free gas", total: Number(drips), team: null });
+  }
+  const link = (n: Name) => {
+    const a = dep?.contracts[n]?.address;
+    const href = a && scan("address", a);
+    return href ? ` <a href="${href}" target="_blank" rel="noopener" title="${n} on BOTScan">↗</a>` : "";
+  };
+  const source: Record<string, Name> = { designs: "PixelWorkshop", artists: "PixelWorkshop", collected: "PixelWorkshop", purchases: "BazaarMarket",
+    offers: "BazaarOffers", requests: "BazaarRequests", projects: "BazaarProjects", botornot: "BotOrNot" };
+  const cell = (v: number | null) => (v === null ? `<span class="muted">·</span>` : String(v));
+  body.innerHTML = `<h2>📊 On-chain numbers <small>${esc(chain().name)} · block ${block}</small></h2>
+    <p class="muted">Read live from the contracts by this page: no server, no estimates. Anyone can check them on BOTScan.</p>
+    <table class="numbers">
+      <thead><tr><th></th><th>Total</th><th>Team tests</th><th>Players</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td>${esc(r.label)}${source[r.key] ? link(source[r.key]) : ""}${r.checked ? ` <small class="muted">(first ${MAX_ITEMS} checked)</small>` : ""}</td>
+        <td>${r.total}</td><td>${cell(r.team)}</td><td><b>${cell(byPlayers(r))}</b></td></tr>`).join("")}</tbody>
+    </table>
+    <p class="muted">${team.length
+      ? `Team tests: what the team's own wallets did (${team.map((a) => short(a)).join(", ")}), e.g. the recorded core-flow run. "·" means the contract has no per-item read to tell them apart.`
+      : "This network lists no team wallets, so every number is shown as a total."}</p>`;
 }
 
 /** Bot or Not without the contract: a resident on stage says one line, the visitor guesses. Nothing
@@ -1516,6 +1553,7 @@ $("#connect").addEventListener("click", () => {
   void refreshBalance();
 });
 setupMusic($<HTMLButtonElement>("#music"));
+$("#to-numbers").addEventListener("click", () => openPanel({ kind: "numbers" }));
 // The workshop opens as a panel over the 3D market, the same as clicking the easel.
 $("#to-workshop").addEventListener("click", () => openPanel({ kind: "tab", tab: "workshop" }));
 $("#panel-close").addEventListener("click", () => {

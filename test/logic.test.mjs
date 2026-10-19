@@ -99,3 +99,26 @@ test("quests: a newcomer starts at the easel, returning players are not greeted 
   assert.equal(markQuest(s, "draw", false), null, "done twice changes nothing");
   assert.deepEqual(loadQuests(mem({ "bazaar-quests": "{bad" })).done, []);
 });
+
+test("public numbers count team test wallets apart and never pad players", async () => {
+  const { chainNumbers, byPlayers } = await import("../web/src/numbers.ts");
+  const team = "0x7cfD8d742C58D9e43A5AA20E8A786A2D193655B3";
+  const p1 = "0x00000000000000000000000000000000000000a1";
+  const designs = [{ creator: team.toLowerCase(), mints: 1 }, { creator: p1, mints: 2 }, { creator: p1, mints: 0 }];
+  const fake = {
+    "PixelWorkshop.designCount": () => 3n,
+    "PixelWorkshop.designsPage": () => [[2n, 1n, 0n], designs],
+    "BazaarMarket.purchaseCount": () => 2n,
+    "BazaarMarket.purchaseOf": ([id]) => [id === 0n ? team : p1],
+    "BazaarRequests.requestCount": () => 2n,
+  };
+  const read = async (c, f, a) => fake[`${c}.${f}`](a ?? []);
+  const rows = await chainNumbers(read, (c) => ["PixelWorkshop", "BazaarMarket", "BazaarRequests"].includes(c), [team]);
+  const by = Object.fromEntries(rows.map((r) => [r.key, r]));
+  assert.deepEqual([by.designs.total, by.designs.team, byPlayers(by.designs)], [3, 1, 2]);
+  assert.deepEqual([by.artists.total, byPlayers(by.artists)], [2, 1]);
+  assert.equal(by.collected.total, 3);
+  assert.equal(byPlayers(by.purchases), 1);
+  assert.equal(byPlayers(by.requests), null, "no per-item read: no player figure is guessed");
+  assert.equal(by.offers, undefined, "a contract the network lacks gives no row");
+});

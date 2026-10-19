@@ -242,3 +242,10 @@ figure button.share { padding: 2px 8px; margin-left: 4px; }
 .w-emotes .w-scenery button.on { background: #ffd166; }
 .w-scenery small { color: #6b5d70; font-size: 11px; }
 .soon-free { margin: 4px 0 10px; }
+/* public on-chain numbers (numbers.ts) */
+.w-numbers { position: absolute; right: 12px; top: 60px; z-index: 24; padding: 4px 12px; font-weight: 800; color: #3a2e3f; background: #fffaf0;
+  border: 2.5px solid #3a2e3f; border-radius: 999px; box-shadow: 0 3px 0 #3a2e3f; }
+.w-numbers:active { transform: translateY(2px); box-shadow: 0 1px 0 #3a2e3f; }
+@media (max-width: 640px) { .w-numbers { top: 12px; right: 8px; font-size: 13px; } }
+table.numbers td:not(:first-child), table.numbers th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+table.numbers a { text-decoration: none; }

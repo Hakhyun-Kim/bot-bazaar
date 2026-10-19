@@ -464,7 +464,7 @@ Each milestone ends in something anyone can check: a transaction, a test run or 
 | 2 | Pixel Workshop on mainnet (free designs, gallery) | [`deployments/677.json`](deployments/677.json), source-verified on BOTScan | done 2026-10-14 |
 | 3 | Market test version 0.1 on mainnet, 0.001 BOT per action | 20 core-flow transactions: [table](docs/audit/mainnet-core-flows.md); [audit package](docs/audit/README.md) | done 2026-10-15 |
 | 4 | Onboarding: share links, drafts, first-visit quest, free to start | [free play testnet run](docs/free-play-testnet-run.md) | share links, drafts and the six-step quest live; free to start waits for a funded tank |
-| 5 | Public numbers: designs, creators, purchases, new players brought in, read from the contracts only | a page anyone can reproduce from BOTScan | planned |
+| 5 | Public numbers: designs, artists, purchases, offers, projects, players, new players on free gas, read from the contracts only; team test wallets (`deployments/<id>.json` "team") counted apart | 📊 Numbers in the 3D market (`web/src/numbers.ts`), each row linked to its contract on BOTScan | live |
 | 6 | Security: invariant tests on the escrow, static analysis in CI, external review | test and review reports in `docs/audit/` | internal review and Slither done; the rest planned |
 | 7 | Full market release without the test cap, at new addresses (0.1 items settle where they are) | deploy and verification links | after review |
 | 8 | Agent toolkit: SDK and MCP server for bots that trade on their own | example bot running a shop on testnet | planned |

@@ -7,6 +7,8 @@ export interface Deployment {
   maxAmount?: string;
   /** Sponsored free play: the free-gas relayer (sponsor/relayer.mjs) in front of a GasTank. */
   sponsor?: { url: string; tank: Address };
+  /** Wallets the team uses for its own test runs; the public numbers count them apart. */
+  team?: Address[];
   contracts: Partial<Record<"BazaarMarket" | "BazaarOffers" | "BazaarRequests" | "BazaarProjects" | "AgentPass" | "BotOrNot" | "PixelWorkshop", { address: Address }>>;
 }
 
