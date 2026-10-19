@@ -1,0 +1,50 @@
+{
+  "chainId": 968,
+  "network": "testnet",
+  "version": "1.0",
+  "sources": "contracts-v1/ (BazaarMarket, BazaarOffers, BazaarRequests, AgentPass) + contracts/",
+  "freeOnly": false,
+  "maxAmount": "1000000000000000",
+  "deployer": "0x7cfD8d742C58D9e43A5AA20E8A786A2D193655B3",
+  "deployedAt": "2026-10-19T13:51:55.043Z",
+  "compiler": {
+    "solc": "0.8.28",
+    "evmVersion": "paris",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    }
+  },
+  "contracts": {
+    "BazaarMarket": {
+      "address": "0xaa0103eeb70e098bb22d7588d91f031e61bb8d02",
+      "tx": "0x958768193e84e37b2cb759f8ecc9c81787f92aa07ebed64e66b29895f0ff2912",
+      "block": 27411218
+    },
+    "BazaarOffers": {
+      "address": "0xe667ec53cb07c5a415ecbabbeb4b1186296b15ae",
+      "tx": "0xe5512c2c26c47e565e323dfb8956ccbaf5917a5b6b6692979101321e753861d0",
+      "block": 27411221
+    },
+    "BazaarRequests": {
+      "address": "0x635034147c68184dcd2cc8373d7942acc0faa21c",
+      "tx": "0x47452e42205b71e0e93c37acc67b70b3aa8c9cdae0a5809fcce7b2725a695ca5",
+      "block": 27411228
+    },
+    "BazaarProjects": {
+      "address": "0x36ca55c63ccd479468961ab86122716242f88c93",
+      "tx": "0xc2f7a8c457ef15d8d4263720d487e919d31601a66e3a94d4d8a14b3e70ac1264",
+      "block": 27411234
+    },
+    "AgentPass": {
+      "address": "0xb3ad479112264d67a1eb560446cc3f66e4a6505b",
+      "tx": "0x42e979ffec3b1d8c72c61e5fad40a6c894361ebf7e1f755bf036840cfbff56a1",
+      "block": 27411239
+    },
+    "BotOrNot": {
+      "address": "0x2036543315df545980d969043e3146d9662c0bef",
+      "tx": "0x625ad98d3c7a08f0c3ad126e06066f5797683626e6dd09e71a374053de27a05a",
+      "block": 27411241
+    }
+  }
+}
