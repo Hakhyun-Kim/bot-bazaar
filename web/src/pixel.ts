@@ -31,3 +31,10 @@ export function patternCanvas(pixelsHex: string, palette: number, scale = 8): HT
   });
   return c;
 }
+
+export const decodePalette = (palette: number) => [0, 1, 2, 3].map((s) => (palette >> (12 - 4 * s)) & 15);
+
+/** A published design as a fresh workshop draft: same pixels and colours, a name that credits the original. */
+export function remixDraft(pixelsHex: string, palette: number, id: number) {
+  return { cells: decodePixels(pixelsHex), slots: decodePalette(palette), name: `Remix of #${id}` };
+}

@@ -124,3 +124,14 @@ test("public numbers count team test wallets apart and never pad players", async
   assert.equal(byPlayers(by.collected), null, "no per-item read: no player figure is guessed");
   assert.equal(by.offers, undefined, "a contract the network lacks gives no row");
 });
+
+test("remix copies a published design into the draft exactly and credits it", async () => {
+  const { encodePixels, encodePalette, remixDraft } = await import("../web/src/pixel.ts");
+  const cells = Array.from({ length: 64 }, (_, i) => (i * 7) % 4);
+  const slots = [0, 13, 5, 2];
+  const r = remixDraft(encodePixels(cells), encodePalette(slots), 42);
+  assert.deepEqual(r.cells, cells);
+  assert.deepEqual(r.slots, slots);
+  assert.equal(r.name, "Remix of #42");
+  assert.ok(r.name.length <= 36);
+});
