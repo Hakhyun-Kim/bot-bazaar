@@ -38,3 +38,9 @@ export const decodePalette = (palette: number) => [0, 1, 2, 3].map((s) => (palet
 export function remixDraft(pixelsHex: string, palette: number, id: number) {
   return { cells: decodePixels(pixelsHex), slots: decodePalette(palette), name: `Remix of #${id}` };
 }
+
+/** File name for a saved design: "bot-bazaar-12-lantern.png". Only safe characters, never empty. */
+export function designFileName(id: number, name: string) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+  return `bot-bazaar-${id}${slug ? `-${slug}` : ""}.png`;
+}

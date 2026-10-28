@@ -135,3 +135,11 @@ test("remix copies a published design into the draft exactly and credits it", as
   assert.equal(r.name, "Remix of #42");
   assert.ok(r.name.length <= 36);
 });
+
+test("a saved design gets a safe, non-empty file name", async () => {
+  const { designFileName } = await import("../web/src/pixel.ts");
+  assert.equal(designFileName(12, "Lantern"), "bot-bazaar-12-lantern.png");
+  assert.equal(designFileName(3, "  Bot face!! ✨ "), "bot-bazaar-3-bot-face.png");
+  assert.equal(designFileName(7, "🎨🎨"), "bot-bazaar-7.png");
+  assert.ok(!/[\\/:]/.test(designFileName(1, "../../etc/passwd")));
+});

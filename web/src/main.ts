@@ -24,7 +24,7 @@ import type { Target, WorldApi, WorldData } from "./world/World";
 import { browserDeploymentKey, deploymentFor, type Deployment } from "./deployments";
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
-import { PRESET16, encodePalette, encodePixels, patternCanvas, remixDraft } from "./pixel";
+import { PRESET16, encodePalette, encodePixels, designFileName, patternCanvas, remixDraft } from "./pixel";
 import { PRACTICE, nextPractice } from "./world/errands";
 import { completeQuest, finishTour, tour } from "./world/tour";
 import { setupMusic } from "./music";
@@ -795,6 +795,7 @@ async function spotlightCard(id: number) {
         <a class="fun-link" href="https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}" target="_blank" rel="noopener">Post on X</a>
         <button class="ghost" data-copylink>Copy link</button>` : ""}
         <button class="ghost" data-remix="${d.pixels}:${d.palette}" title="Start a draft from this design">Remix ✏️</button>
+        <button class="ghost" data-png="${d.pixels}:${d.palette}" title="Save a copy of this design as an image">Save PNG</button>
         <button class="ghost" data-draw>Draw your own ↓</button>
       </p>
     </div>
@@ -888,6 +889,16 @@ async function viewWorkshop(el: HTMLElement) {
     spotEl.querySelector("[data-native]")?.addEventListener("click", () =>
       void navigator.share({ title: "BOT Bazaar", text: `"${spotEl.querySelector("h3")!.textContent}" on BOT Chain`, url: designLink(id) }).catch(() => undefined));
     spotEl.querySelector("[data-draw]")?.addEventListener("click", () => grid.scrollIntoView({ behavior: "smooth", block: "center" }));
+    // A PNG copy the player keeps, drawn from the same on-chain pixels (8x8 at 32 px per cell).
+    spotEl.querySelector<HTMLElement>("[data-png]")?.addEventListener("click", (e) => {
+      const [px, pal] = (e.currentTarget as HTMLElement).dataset.png!.split(":");
+      patternCanvas(px, Number(pal), 32).toBlob((b) => {
+        if (!b) return;
+        const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(b), download: designFileName(id, spotEl.querySelector("h3")!.textContent ?? "") });
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }, "image/png");
+    });
     // Remixing copies the design into the draft; nothing goes on chain until the player publishes it.
     spotEl.querySelector<HTMLElement>("[data-remix]")?.addEventListener("click", (e) => {
       if (cells.some((c) => c) && !confirm("Replace your current drawing with this design?")) return;
