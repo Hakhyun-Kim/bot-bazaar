@@ -1142,6 +1142,8 @@ async function viewBotOrNot(el: HTMLElement) {
     <p class="hero">Traders who have not declared what they are can enter a round with a sealed answer. Everyone else guesses
       🤖 or 🧑 once. After a day they reveal: right guesses score a point for the detective, wrong guesses score a point for
       the trader. No money, only bragging rights, all on chain.</p>
+    <div id="warmup"><p><button class="ghost" id="warmup-go">🎭 Warm up with a practice round</button>
+      <span class="muted">no gas, nothing on chain</span></p></div>
     <h3>Live rounds</h3>
     <div class="grid">${live
       .map(
@@ -1166,6 +1168,7 @@ async function viewBotOrNot(el: HTMLElement) {
       <section><h3>🔍 Best detectives</h3><ol>${top("correct").map(({ a, s }) => `<li>${short(a)} · ${s.correct}/${s.guesses}</li>`).join("") || "<li>None yet</li>"}</ol></section>
       <section><h3>🎭 Most convincing</h3><ol>${top("fooled").map(({ a, s }) => `<li>${short(a)} · fooled ${s.fooled} in ${s.rounds} round(s)</li>`).join("") || "<li>None yet</li>"}</ol></section>
     </div>`;
+  el.querySelector("#warmup-go")?.addEventListener("click", () => viewPractice(el.querySelector<HTMLElement>("#warmup")!, true));
   el.querySelectorAll<HTMLButtonElement>("[data-guess]").forEach((b) =>
     b.addEventListener("click", () => {
       const [t, isBot] = b.dataset.guess!.split(":");
@@ -1373,22 +1376,24 @@ async function viewNumbers(body: HTMLElement) {
       : "This network lists no team wallets, so every number is shown as a total."}</p>`;
 }
 
-/** Bot or Not without the contract: a resident on stage says one line, the visitor guesses. Nothing
- *  goes on chain; the real game with on-chain votes stays on testnet until it comes to mainnet. */
+/** Bot or Not without the contract: a resident on stage says one line, the visitor guesses, and the
+ *  reveal names the tell. Nothing goes on chain. Shown on its own where the BotOrNot contract is
+ *  missing, and as a warm-up above the real rounds where it is deployed. */
 let practiceAt = -1;
-function viewPractice(body: HTMLElement) {
+function viewPractice(body: HTMLElement, warmup = false) {
   practiceAt = nextPractice(practiceAt);
   const round = PRACTICE[practiceAt];
   const best = Number(store.get("bazaar-practice-best")) || 0;
   const streak = Number(store.get("bazaar-practice-streak")) || 0;
-  body.innerHTML = `<h2>🎭 Bot or Not <small>practice round</small></h2>
+  const h = warmup ? "h3" : "h2";
+  body.innerHTML = `<${h}>🎭 Bot or Not <small>practice round</small></${h}>
     <p>A hooded trader steps on stage and says:</p>
     <blockquote class="practice-line">“${esc(round.line)}”</blockquote>
     <p>Bot or human?</p>
     <p class="practice-pick"><button class="fun" data-guess="bot">🤖 Bot</button> <button class="fun" data-guess="human">🧑 Human</button></p>
     <p id="practice-out" aria-live="polite"></p>
-    <p class="muted">Best streak ${best}. Practice only: nothing is written on chain. The real game, with votes on chain,
-      <a href="?network=testnet">runs on testnet</a> and comes to ${esc(chain().name)} later.</p>`;
+    <p class="muted">Best streak ${best}. Practice only: nothing is written on chain.${warmup ? " The real rounds are below."
+      : ` The real game, with votes on chain, <a href="?network=testnet">runs on testnet</a> and comes to ${esc(chain().name)} later.`}</p>`;
   body.querySelectorAll<HTMLButtonElement>("[data-guess]").forEach((b) =>
     b.addEventListener("click", () => {
       const right = (b.dataset.guess === "bot") === round.bot;
@@ -1398,8 +1403,9 @@ function viewPractice(body: HTMLElement) {
       body.querySelectorAll<HTMLButtonElement>("[data-guess]").forEach((x) => (x.disabled = true));
       const out = body.querySelector("#practice-out")!;
       out.innerHTML = `${right ? "✅ Right!" : "❌ Not quite."} The hood comes off: it was <b>${esc(round.who)}</b>, ${round.bot ? "a bot 🤖" : "a human 🧑"}.
-        Streak ${now}. <button class="fun" data-next>Next round</button>`;
-      out.querySelector("[data-next]")!.addEventListener("click", () => viewPractice(body));
+        <br><span class="muted">The tell: ${esc(round.tell)}</span>
+        <br>Streak ${now}. <button class="fun" data-next>Next round</button>`;
+      out.querySelector("[data-next]")!.addEventListener("click", () => viewPractice(body, warmup));
     }),
   );
 }

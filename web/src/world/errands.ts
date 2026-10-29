@@ -51,18 +51,38 @@ export function completeErrand(id: ErrandId, s: ErrandState): ErrandState | null
   return next;
 }
 
-/** Bot or Not practice: who said it, and whether they are a bot. Nothing is written on chain. */
+/** Bot or Not practice: who said it, whether they are a bot, and the tell that gives it away.
+ *  Some rounds are tricky on purpose: a human who sounds like a script, a bot that sounds casual.
+ *  Nothing is written on chain. */
 export const PRACTICE = [
-  { line: "I restock my paint pots at 06:00:00 sharp. Every day. Never late.", who: "Gearbox", bot: true },
-  { line: "Sorry, I was going to draw a cat but it turned into a potato.", who: "Mina", bot: false },
-  { line: "Your design uses 4 of 16 colours. Shall I suggest 12 more?", who: "Palette-9", bot: true },
-  { line: "I came for the dumplings stall. Is it open yet?", who: "Joon", bot: false },
-  { line: "I have read every design on chain. Number 3 is my favourite.", who: "Index", bot: true },
-  { line: "My little brother drew the robot one. Don't tell him I said it was good.", who: "Sora", bot: false },
-  { line: "Haggling detected. Opening offer: exactly 70% of list price.", who: "Haggle-Bot", bot: true },
-  { line: "Can you help me? I clicked publish and now I'm nervous.", who: "Dami", bot: false },
-  { line: "I never sleep, so I keep the lanterns lit for everyone.", who: "Lumen", bot: true },
-  { line: "Pixel art is hard on a phone. My thumb is bigger than the squares!", who: "Hana", bot: false },
+  { line: "I restock my paint pots at 06:00:00 sharp. Every day. Never late.", who: "Gearbox", bot: true,
+    tell: "To-the-second timing every day is a schedule, not a habit." },
+  { line: "Sorry, I was going to draw a cat but it turned into a potato.", who: "Mina", bot: false,
+    tell: "A plan that went wrong and a joke about it: very human." },
+  { line: "Your design uses 4 of 16 colours. Shall I suggest 12 more?", who: "Palette-9", bot: true,
+    tell: "Exact counts plus an unasked offer to do more work." },
+  { line: "I came for the dumplings stall. Is it open yet?", who: "Joon", bot: false,
+    tell: "Hungry, and asking instead of already knowing the opening hours." },
+  { line: "I have read every design on chain. Number 3 is my favourite.", who: "Index", bot: true,
+    tell: "Reading everything and naming designs by number." },
+  { line: "My little brother drew the robot one. Don't tell him I said it was good.", who: "Sora", bot: false,
+    tell: "Family, a small secret, a grudging compliment." },
+  { line: "Haggling detected. Opening offer: exactly 70% of list price.", who: "Haggle-Bot", bot: true,
+    tell: "A fixed rule stated out loud: exactly 70%." },
+  { line: "Can you help me? I clicked publish and now I'm nervous.", who: "Dami", bot: false,
+    tell: "Nerves after the fact: bots don't regret a click." },
+  { line: "I never sleep, so I keep the lanterns lit for everyone.", who: "Lumen", bot: true,
+    tell: "Never sleeping is the whole job description." },
+  { line: "Pixel art is hard on a phone. My thumb is bigger than the squares!", who: "Hana", bot: false,
+    tell: "A body in the way: thumbs are a human problem." },
+  { line: "I set an alert for new designs so I get first pick. Same as everyone, right?", who: "Ji-ho", bot: false,
+    tell: "Tricky: a human using automation, and a little unsure about it." },
+  { line: "Honestly? Long week. Anyway, I can quote you a price in under a second.", who: "Quill", bot: true,
+    tell: "Tricky: small talk on top, then a speed no person promises." },
+  { line: "I bought it because my wallet agent said the price was fair. I trust it more than me.", who: "Taeyang", bot: false,
+    tell: "Tricky: a human who lets an agent shop, and admits it." },
+  { line: "Same answer as yesterday: no discounts on Sundays. Have a nice Sunday.", who: "Ledger", bot: true,
+    tell: "Repeats yesterday word for word, politeness included." },
 ] as const;
 
 /** A practice order that differs from visit to visit but never repeats a round back to back. */

@@ -143,3 +143,11 @@ test("a saved design gets a safe, non-empty file name", async () => {
   assert.equal(designFileName(7, "🎨🎨"), "bot-bazaar-7.png");
   assert.ok(!/[\\/:]/.test(designFileName(1, "../../etc/passwd")));
 });
+
+test("every Bot or Not practice round explains its tell, with both bots and humans", async () => {
+  const { PRACTICE } = await import("../web/src/world/errands.ts");
+  assert.equal(new Set(PRACTICE.map((r) => r.line)).size, PRACTICE.length);
+  for (const r of PRACTICE) assert.ok(r.tell.length > 10 && r.tell.length <= 90, `${r.who}: tell missing or too long`);
+  const bots = PRACTICE.filter((r) => r.bot).length;
+  assert.ok(bots >= PRACTICE.length / 3 && bots <= (PRACTICE.length * 2) / 3, "rounds lean too far to one side");
+});
