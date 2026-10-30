@@ -21,7 +21,8 @@ import { BEACH_IN, WaterPark, useLevel } from "./waterpark";
 import { DPR, LEVEL_NAME, autoStep, chooseScenery, scenery, type Choice } from "./scenery";
 
 export type Tab = "requests" | "botornot" | "workshop" | "projects" | "account";
-export type Target = { kind: "shop"; owner: string } | { kind: "tab"; tab: Tab };
+/** `design` on the workshop tab opens with that design up front (tapping a gallery frame). */
+export type Target = { kind: "shop"; owner: string } | { kind: "tab"; tab: Tab; design?: number };
 
 export interface WorldShop {
   owner: string;
@@ -484,7 +485,7 @@ const FRAME = ["#ffd166", "#7cc6f2", "#ff8fa3", "#5ccf7a", "#b98cff", "#ff9f1c"]
 function GalleryStand({ slot, design, n, open }: { slot: (typeof SLOTS)[number]; design: Design | null; n: number; open: (t: Target) => void }) {
   const color = FRAME[n % FRAME.length];
   return (
-    <group position={[slot.x, 0, slot.z]} rotation={[0, slot.rot, 0]} {...clickable(() => open({ kind: "tab", tab: "workshop" }))}>
+    <group position={[slot.x, 0, slot.z]} rotation={[0, slot.rot, 0]} {...clickable(() => open({ kind: "tab", tab: "workshop", design: design?.id }))}>
       {[-1.35, 1.35].map((x) => (
         <P key={x} color={WOOD_DARK} position={[x, 1.2, -0.7]}><cylinderGeometry args={[0.08, 0.09, 2.4, 10]} /></P>
       ))}
@@ -1369,7 +1370,7 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
     const out: Spot[] = placed.map(({ shop, slot }) => ({ x: slot.x, z: slot.z, r: 1.7, name: shop.title, target: { kind: "shop", owner: shop.owner } }));
     if (free) out.push({ x: free.x, z: free.z, r: 1.7, name: "Free stall: open your shop", target: { kind: "tab", tab: "account" } });
     for (const { slot, design } of gallery)
-      out.push({ x: slot.x, z: slot.z, r: 1.7, name: design ? `“${design.name}” (gallery)` : "Empty frame: draw one", target: { kind: "tab", tab: "workshop" } });
+      out.push({ x: slot.x, z: slot.z, r: 1.7, name: design ? `“${design.name}” (gallery)` : "Empty frame: draw one", target: { kind: "tab", tab: "workshop", design: design?.id } });
     for (const slot of shut) out.push({ x: slot.x, z: slot.z, r: 1.7, name: "Shop (coming soon)", target: { kind: "tab", tab: "account" } });
     out.push(
       { ...LANDMARK.core, name: "Escrow lockers: your orders", target: { kind: "tab", tab: "account" } },

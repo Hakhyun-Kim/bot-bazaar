@@ -1301,6 +1301,8 @@ setInterval(async () => {
 
 function openPanel(t: PanelTarget) {
   panel = t;
+  // A tapped gallery frame opens the workshop on that design: collect, remix or save it.
+  if (t.kind === "tab" && t.design !== undefined) (spotlight = t.design), (justPublished = false);
   if (t.kind === "tab" && t.tab === "workshop") {
     world?.errand("draw");
     finishTour();
