@@ -160,3 +160,15 @@ test("a remix's name links back to the original it credits", async () => {
   assert.equal(remixOf("My Remix of #3"), null);
   assert.equal(remixOf("Remix of #"), null);
 });
+
+test("the gallery's pick of the day is stable within a day and stays in range", async () => {
+  const { dailyIndex } = await import("../web/src/world/errands.ts");
+  assert.equal(dailyIndex("2026-11-1", 0), -1);
+  for (const n of [1, 2, 7, 44]) {
+    const i = dailyIndex("2026-11-1", n);
+    assert.ok(i >= 0 && i < n);
+    assert.equal(dailyIndex("2026-11-1", n), i);
+  }
+  const week = new Set(Array.from({ length: 7 }, (_, d) => dailyIndex(`2026-11-${d + 1}`, 44)));
+  assert.ok(week.size >= 4, "the pick should change from day to day");
+});

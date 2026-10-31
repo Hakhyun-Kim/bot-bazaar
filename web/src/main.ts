@@ -25,7 +25,7 @@ import { browserDeploymentKey, deploymentFor, type Deployment } from "./deployme
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
 import { PRESET16, encodePalette, encodePixels, designFileName, patternCanvas, remixDraft, remixOf } from "./pixel";
-import { PRACTICE, nextPractice } from "./world/errands";
+import { PRACTICE, dailyIndex, dayKey, nextPractice } from "./world/errands";
 import { completeQuest, finishTour, tour } from "./world/tour";
 import { setupMusic } from "./music";
 import { claimFreeGas, claimMessage, sponsorStatus, type SponsorStatus } from "./sponsor";
@@ -1220,15 +1220,18 @@ const shopCache = new Map<Address, ShopData & { owner: Address }>();
 const FEED_PAGE = 48;
 /** The newest designs and real activity numbers for the market's billboard. "Last 24h" and
  *  "artists" are counted over the newest page only, so a full page shows as "48+". */
-async function designFeed(): Promise<Pick<WorldData, "designs" | "stats">> {
+async function designFeed(): Promise<Pick<WorldData, "designs" | "stats" | "pick">> {
   const [ids, list] = await read<[bigint[], { creator: Address; createdAt: bigint; name: string; pixels: string; palette: number }[]]>(
     "PixelWorkshop", "designsPage", [0n, BigInt(FEED_PAGE)]);
   const total = Number(await read<bigint>("PixelWorkshop", "designCount"));
   const now = Number(nowSec());
   const full = list.length >= FEED_PAGE;
   const day = list.filter((d) => now - Number(d.createdAt) < 86400).length;
+  const asDesign = (i: number) => ({ id: Number(ids[i]), name: list[i].name, pixels: list[i].pixels, palette: list[i].palette, creator: list[i].creator, createdAt: Number(list[i].createdAt) });
   return {
-    designs: list.slice(0, 8).map((d, i) => ({ id: Number(ids[i]), name: d.name, pixels: d.pixels, palette: d.palette, creator: d.creator, createdAt: Number(d.createdAt) })),
+    designs: list.slice(0, 8).map((_, i) => asDesign(i)),
+    // An older design (past the newest four) gets a gallery frame for the day, so it is seen again.
+    pick: list.length > 4 ? asDesign(4 + dailyIndex(dayKey(), list.length - 4)) : null,
     stats: {
       total,
       day: full && day === list.length ? `${day}+` : String(day),
@@ -1239,11 +1242,11 @@ async function designFeed(): Promise<Pick<WorldData, "designs" | "stats">> {
 }
 
 async function worldData(): Promise<WorldData> {
-  const { designs, stats } = await designFeed();
+  const { designs, stats, pick } = await designFeed();
   seenDesigns = Math.max(seenDesigns, stats.total);
   if (workshopOnly()) {
     shopCache.clear();
-    return { me, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs, stats, projects: [], purchases: 0, soon: true };
+    return { me, myKind: 0, myShop: false, shops: [], requests: [], rounds: [], designs, pick, stats, projects: [], purchases: 0, soon: true };
   }
   const [owners, shops] = await read<[Address[], ShopData[], bigint]>("BazaarMarket", "openShops", [0n, 100n]);
   const [, reqs] = await read<[bigint[], RequestData[], bigint]>("BazaarRequests", "openRequests", [0n, 20n]);
@@ -1278,6 +1281,7 @@ async function worldData(): Promise<WorldData> {
     requests: reqs.map((r) => ({ title: r.title, reward: bot(r.reward), wants: r.wants })),
     rounds,
     designs,
+    pick,
     stats,
     projects: projects.map((p) => p.name),
     purchases: Number(purchases),

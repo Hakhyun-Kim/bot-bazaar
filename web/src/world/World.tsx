@@ -40,6 +40,8 @@ export interface WorldData {
   requests: { title: string; reward: string; wants: number }[];
   rounds: { trader: string; bot: number; human: number }[];
   designs: { id: number; name: string; pixels: string; palette: number; creator: string; createdAt: number }[];
+  /** One older design given the last gallery frame for the day (see designFeed in main.ts). */
+  pick?: WorldData["designs"][number] | null;
   /** Real on-chain numbers for the billboard (see designFeed in main.ts). */
   stats: { total: number; day: string; artists: string; now: number };
   projects: string[];
@@ -482,7 +484,7 @@ function SoonStall({ slot, open }: { slot: (typeof SLOTS)[number]; open: (t: Tar
 /** A gallery stand: an on-chain design hung in a big frame where a shop would be. An empty frame
  *  invites the visitor to draw the next one. */
 const FRAME = ["#ffd166", "#7cc6f2", "#ff8fa3", "#5ccf7a", "#b98cff", "#ff9f1c"];
-function GalleryStand({ slot, design, n, open }: { slot: (typeof SLOTS)[number]; design: Design | null; n: number; open: (t: Target) => void }) {
+function GalleryStand({ slot, design, n, pick, open }: { slot: (typeof SLOTS)[number]; design: Design | null; n: number; pick?: boolean; open: (t: Target) => void }) {
   const color = FRAME[n % FRAME.length];
   return (
     <group position={[slot.x, 0, slot.z]} rotation={[0, slot.rot, 0]} {...clickable(() => open({ kind: "tab", tab: "workshop", design: design?.id }))}>
@@ -500,7 +502,7 @@ function GalleryStand({ slot, design, n, open }: { slot: (typeof SLOTS)[number];
       <Html position={[0, 3.25, 0.6]} center distanceFactor={13} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
         <div className={`w-sign gallery${design ? "" : " free"}`} style={{ borderTopColor: color }}>
           <b>{design ? `🖼️ “${design.name}”` : "🖼️ Empty frame"}</b>
-          <span>{design ? `by ${short(design.creator)} · ${ago(data.stats.now - design.createdAt)}` : "publish a design to hang here"}</span>
+          <span>{design ? `${pick ? "⭐ pick of the day · " : ""}by ${short(design.creator)} · ${ago(data.stats.now - design.createdAt)}` : "publish a design to hang here"}</span>
         </div>
       </Html>
     </group>
@@ -1362,7 +1364,9 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
   // Slots no shop uses hang the on-chain designs (empty frames invite a drawing). Where shops are not
   // open yet, two shuttered stalls stay as "coming soon".
   const used = placed.length + (free ? 1 : 0);
-  const gallery = SLOTS.slice(used, used + (d.soon ? 6 : Math.min(4, d.designs.length))).map((slot, i) => ({ slot, design: d.designs[i] ?? null }));
+  // Newest designs first; with more than four, the last frame goes to an older one picked for the day.
+  const hung = d.pick && !d.soon ? [...d.designs.slice(0, 3), d.pick] : d.designs;
+  const gallery = SLOTS.slice(used, used + (d.soon ? 6 : Math.min(4, hung.length))).map((slot, i) => ({ slot, design: hung[i] ?? null, pick: !!d.pick && !d.soon && i === 3 }));
   const shut = d.soon ? SLOTS.slice(used + gallery.length, used + gallery.length + 2) : [];
   placesAt.gallery = gallery[0]?.slot ?? null;
   placesAt.shop = placed[0]?.slot ?? free ?? null;
@@ -1408,7 +1412,7 @@ function Scene({ open, setNear }: { open: (t: Target) => void; setNear: (s: Spot
       <ProjectGate open={open} />
       {placed.map(({ shop, slot }) => <Stall key={shop.owner} shop={shop} slot={slot} open={open} />)}
       {free && <EmptyStall slot={free} open={open} />}
-      {gallery.map(({ slot, design }, i) => <GalleryStand key={`g${i}`} slot={slot} design={design} n={i} open={open} />)}
+      {gallery.map(({ slot, design, pick }, i) => <GalleryStand key={`g${i}`} slot={slot} design={design} n={i} pick={pick} open={open} />)}
       {shut.map((slot, i) => <SoonStall key={i} slot={slot} open={open} />)}
       {RESIDENTS.map((r) => <ResidentFigure key={r.id} r={r} open={() => talk(r)} />)}
       <People />

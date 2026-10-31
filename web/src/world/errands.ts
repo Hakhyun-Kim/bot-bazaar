@@ -90,3 +90,11 @@ export function nextPractice(prev: number, rnd = Math.random()): number {
   const n = PRACTICE.length;
   return (prev + 1 + Math.floor(rnd * (n - 1))) % n;
 }
+
+/** Today's pick among n older designs: the same for everyone on the same day, a different one each day. */
+export function dailyIndex(day: string, n: number): number {
+  if (n <= 0) return -1;
+  let h = 7;
+  for (const ch of day) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+  return h % n;
+}
