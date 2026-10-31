@@ -24,7 +24,7 @@ import type { Target, WorldApi, WorldData } from "./world/World";
 import { browserDeploymentKey, deploymentFor, type Deployment } from "./deployments";
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
-import { PRESET16, encodePalette, encodePixels, designFileName, patternCanvas, remixDraft } from "./pixel";
+import { PRESET16, encodePalette, encodePixels, designFileName, patternCanvas, remixDraft, remixOf } from "./pixel";
 import { PRACTICE, nextPractice } from "./world/errands";
 import { completeQuest, finishTour, tour } from "./world/tour";
 import { setupMusic } from "./music";
@@ -788,7 +788,10 @@ async function spotlightCard(id: number) {
       ${justPublished ? `<p class="spot-new">🎉 Published on ${esc(chain().name)}! Share it so friends can collect it.</p>` : ""}
       <h3>${esc(d.name)}</h3>
       <p class="muted">by ${who ? `<a href="${who}" target="_blank" rel="noopener">${short(d.creator)}</a>` : short(d.creator)}
-        · ${d.mints} collected · design #${id}</p>
+        · ${d.mints} collected · design #${id}${(() => {
+          const from = remixOf(d.name);
+          return from !== null && from !== id ? ` · <button class="link" data-show="${from}" title="Open the design this one remixes">remix of #${from}</button>` : "";
+        })()}</p>
       <p class="spot-act">
         ${me && d.creator === me ? "" : `<button class="fun" data-collect="${id}:${d.price}">${d.price ? bot(d.price) : "Collect free"}</button>`}
         ${sharing ? `${"share" in navigator ? `<button class="ghost" data-native>Share…</button>` : ""}

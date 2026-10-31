@@ -151,3 +151,12 @@ test("every Bot or Not practice round explains its tell, with both bots and huma
   const bots = PRACTICE.filter((r) => r.bot).length;
   assert.ok(bots >= PRACTICE.length / 3 && bots <= (PRACTICE.length * 2) / 3, "rounds lean too far to one side");
 });
+
+test("a remix's name links back to the original it credits", async () => {
+  const { remixDraft, remixOf, encodePixels, encodePalette } = await import("../web/src/pixel.ts");
+  assert.equal(remixOf(remixDraft(encodePixels(new Array(64).fill(1)), encodePalette([0, 1, 2, 3]), 12).name), 12);
+  assert.equal(remixOf("  Remix of #7 (blue)"), 7);
+  assert.equal(remixOf("Lantern"), null);
+  assert.equal(remixOf("My Remix of #3"), null);
+  assert.equal(remixOf("Remix of #"), null);
+});

@@ -251,3 +251,4 @@ table.numbers td:not(:first-child), table.numbers th:not(:first-child) { text-al
 table.numbers a { text-decoration: none; }
 .chain-error { padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--panel); }
 .chain-error pre { white-space: pre-wrap; word-break: break-all; font-size: 11px; max-height: 160px; overflow: auto; }
+.spot button.link { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }

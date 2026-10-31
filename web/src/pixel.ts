@@ -44,3 +44,9 @@ export function designFileName(id: number, name: string) {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
   return `bot-bazaar-${id}${slug ? `-${slug}` : ""}.png`;
 }
+
+/** The original a remix credits, read from its name ("Remix of #12" → 12), or null. */
+export function remixOf(name: string): number | null {
+  const m = /^Remix of #(\d{1,9})\b/.exec(name.trim());
+  return m ? Number(m[1]) : null;
+}
