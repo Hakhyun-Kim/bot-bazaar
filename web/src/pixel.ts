@@ -50,3 +50,9 @@ export function remixOf(name: string): number | null {
   const m = /^Remix of #(\d{1,9})\b/.exec(name.trim());
   return m ? Number(m[1]) : null;
 }
+
+/** The day a design went on chain, as UTC "YYYY-MM-DD": its public date of authorship. "" when unknown. */
+export function onChainSince(createdAt: number | bigint): string {
+  const s = Number(createdAt);
+  return s > 0 ? new Date(s * 1000).toISOString().slice(0, 10) : "";
+}

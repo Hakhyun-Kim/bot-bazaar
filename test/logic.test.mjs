@@ -172,3 +172,10 @@ test("the gallery's pick of the day is stable within a day and stays in range", 
   const week = new Set(Array.from({ length: 7 }, (_, d) => dailyIndex(`2026-11-${d + 1}`, 44)));
   assert.ok(week.size >= 4, "the pick should change from day to day");
 });
+
+test("a design card dates its authorship from the chain's own timestamp", async () => {
+  const { onChainSince } = await import("../web/src/pixel.ts");
+  assert.equal(onChainSince(1793000000), "2026-10-26");
+  assert.equal(onChainSince(1793000000n), "2026-10-26");
+  assert.equal(onChainSince(0), "");
+});

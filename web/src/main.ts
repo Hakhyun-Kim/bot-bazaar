@@ -24,7 +24,7 @@ import type { Target, WorldApi, WorldData } from "./world/World";
 import { browserDeploymentKey, deploymentFor, type Deployment } from "./deployments";
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
-import { PRESET16, encodePalette, encodePixels, designFileName, patternCanvas, remixDraft, remixOf } from "./pixel";
+import { PRESET16, encodePalette, encodePixels, designFileName, onChainSince, patternCanvas, remixDraft, remixOf } from "./pixel";
 import { PRACTICE, dailyIndex, dayKey, nextPractice } from "./world/errands";
 import { completeQuest, finishTour, tour } from "./world/tour";
 import { setupMusic } from "./music";
@@ -775,7 +775,7 @@ function loadDraft(): Draft | null {
 }
 
 async function spotlightCard(id: number) {
-  type D = { creator: Address; name: string; mints: number; price: bigint; pixels: string; palette: number };
+  type D = { creator: Address; name: string; mints: number; price: bigint; pixels: string; palette: number; createdAt: bigint };
   const d = await read<D>("PixelWorkshop", "designAt", [BigInt(id)]).catch(() => null);
   if (!d) return "";
   const who = scan("address", d.creator);
@@ -788,7 +788,7 @@ async function spotlightCard(id: number) {
       ${justPublished ? `<p class="spot-new">🎉 Published on ${esc(chain().name)}! Share it so friends can collect it.</p>` : ""}
       <h3>${esc(d.name)}</h3>
       <p class="muted">by ${who ? `<a href="${who}" target="_blank" rel="noopener">${short(d.creator)}</a>` : short(d.creator)}
-        · ${d.mints} collected · design #${id}${(() => {
+        · ${d.mints} collected · design #${id}${onChainSince(d.createdAt) ? ` · <span title="The date the chain recorded this design and its author">on chain since ${onChainSince(d.createdAt)}</span>` : ""}${(() => {
           const from = remixOf(d.name);
           return from !== null && from !== id ? ` · <button class="link" data-show="${from}" title="Open the design this one remixes">remix of #${from}</button>` : "";
         })()}</p>
