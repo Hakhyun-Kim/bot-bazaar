@@ -14,7 +14,7 @@ import { PRESET16, decodePixels } from "../pixel";
 import { Trader, type Mood } from "./characters";
 import { BlobShadow, Props, type PropAt } from "./props";
 import { GRAD, INK, hue } from "./toon";
-import { completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
+import { boltIdleLine, completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
 import { joinMarket, leaveMarket, myName, onPeerEmote, peers, peersVersion, setMyName, subscribePeers, tellEmote, tellPose } from "./peers";
 import { QUESTS, completeQuest, currentQuest, endQuests, finishTour, foldQuests, guideQuest, isLocked, onQuestDone, questCount, quests, questsComplete, setQuestSoon, skipTour, stopGuide, subscribeTour, tour, walkTour, type Quest, type QuestId } from "./tour";
 import { BEACH_IN, WaterPark, useLevel } from "./waterpark";
@@ -302,10 +302,10 @@ function talk(r: Resident) {
   completeQuest("hello");
 }
 
-/** A line said unasked. Bolt reads the real numbers off the billboard. */
+/** A line said unasked. Bolt reads the real numbers off the billboard and names the gallery's pick of the day. */
 function idleLine(r: Resident): string {
   const st = data.stats;
-  if (r.id === "bolt" && st.total) return Math.random() < 0.5 ? `${st.total} designs on BOT Chain so far. ${st.day} in the last day!` : "Hi there! Tap me if you need a tip.";
+  if (r.id === "bolt" && (st.total || data.pick)) return boltIdleLine(st.total, st.day, data.pick?.name ?? null);
   const pool = r.idle ?? r.lines;
   return pool[Math.floor(Math.random() * pool.length)];
 }

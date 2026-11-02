@@ -98,3 +98,11 @@ export function dailyIndex(day: string, n: number): number {
   for (const ch of day) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
   return h % n;
 }
+
+/** What Bolt says unasked: the real design count, today's gallery pick by its real name, or a tip.
+ *  Nothing here is invented: no count before there are designs, no pick before there is one. */
+export function boltIdleLine(total: number, day: string, pick: string | null, rnd = Math.random()): string {
+  const tip = "Hi there! Tap me if you need a tip.";
+  const lines = [tip, ...(total ? [`${total} designs on chain so far. ${day} in the last day!`] : []), ...(pick ? [`Today's pick in the gallery: “${pick}”. Older, still good.`] : [])];
+  return lines[Math.min(lines.length - 1, Math.floor(rnd * lines.length))];
+}

@@ -179,3 +179,15 @@ test("a design card dates its authorship from the chain's own timestamp", async 
   assert.equal(onChainSince(1793000000n), "2026-10-26");
   assert.equal(onChainSince(0), "");
 });
+
+test("Bolt only quotes real numbers and the real pick of the day", async () => {
+  const { boltIdleLine } = await import("../web/src/world/errands.ts");
+  const all = (total, day, pick) => new Set(Array.from({ length: 50 }, (_, i) => boltIdleLine(total, day, pick, i / 50)));
+  assert.deepEqual([...all(0, "0", null)], ["Hi there! Tap me if you need a tip."]);
+  const some = [...all(12, "3", "Lantern")];
+  assert.equal(some.length, 3);
+  assert.ok(some.some((l) => l.includes("12 designs") && l.includes("3 in the last day")));
+  assert.ok(some.some((l) => l.includes("“Lantern”")));
+  assert.ok(![...all(12, "3", null)].some((l) => l.includes("pick")));
+  assert.equal(typeof boltIdleLine(1, "1", "x", 0.9999), "string");
+});
