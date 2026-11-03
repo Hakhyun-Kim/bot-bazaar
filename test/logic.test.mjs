@@ -191,3 +191,11 @@ test("Bolt only quotes real numbers and the real pick of the day", async () => {
   assert.ok(![...all(12, "3", null)].some((l) => l.includes("pick")));
   assert.equal(typeof boltIdleLine(1, "1", "x", 0.9999), "string");
 });
+
+test("the Telegram share link carries the design link and text, encoded", async () => {
+  const { telegramShare } = await import("../web/src/pixel.ts");
+  const u = new URL(telegramShare("https://play.metah.dev/?design=12", 'I drew "Lantern" & more'));
+  assert.equal(u.origin + u.pathname, "https://t.me/share/url");
+  assert.equal(u.searchParams.get("url"), "https://play.metah.dev/?design=12");
+  assert.equal(u.searchParams.get("text"), 'I drew "Lantern" & more');
+});

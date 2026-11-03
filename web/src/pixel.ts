@@ -56,3 +56,7 @@ export function onChainSince(createdAt: number | bigint): string {
   const s = Number(createdAt);
   return s > 0 ? new Date(s * 1000).toISOString().slice(0, 10) : "";
 }
+
+/** Telegram's share sheet for a design link (opens Telegram, where the player picks the chat). */
+export const telegramShare = (url: string, text: string) =>
+  `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;

@@ -24,7 +24,7 @@ import type { Target, WorldApi, WorldData } from "./world/World";
 import { browserDeploymentKey, deploymentFor, type Deployment } from "./deployments";
 import { FAUCET, NETWORKS, type NetworkKey } from "./networks";
 import { TABS, tabsFor, type Tab } from "./screens";
-import { PRESET16, encodePalette, encodePixels, designFileName, onChainSince, patternCanvas, remixDraft, remixOf } from "./pixel";
+import { PRESET16, encodePalette, encodePixels, designFileName, onChainSince, patternCanvas, remixDraft, remixOf, telegramShare } from "./pixel";
 import { PRACTICE, dailyIndex, dayKey, nextPractice } from "./world/errands";
 import { completeQuest, finishTour, tour } from "./world/tour";
 import { setupMusic } from "./music";
@@ -796,6 +796,7 @@ async function spotlightCard(id: number) {
         ${me && d.creator === me ? "" : `<button class="fun" data-collect="${id}:${d.price}">${d.price ? bot(d.price) : "Collect free"}</button>`}
         ${sharing ? `${"share" in navigator ? `<button class="ghost" data-native>Share…</button>` : ""}
         <a class="fun-link" href="https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}" target="_blank" rel="noopener">Post on X</a>
+        <a class="fun-link" href="${telegramShare(url, text)}" target="_blank" rel="noopener">Telegram</a>
         <button class="ghost" data-copylink>Copy link</button>` : ""}
         <button class="ghost" data-remix="${d.pixels}:${d.palette}" title="Start a draft from this design">Remix ✏️</button>
         <button class="ghost" data-png="${d.pixels}:${d.palette}" title="Save a copy of this design as an image">Save PNG</button>
