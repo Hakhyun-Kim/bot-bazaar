@@ -21,7 +21,7 @@ receipts and a buyer base without writing commerce contracts themselves.
 | | |
 |---|---|
 | Status | Mainnet: all seven contracts since 2026-10-14. Pixel Workshop (free designs) is the full release; the market (six contracts) is an **unaudited test version 0.1** with a 0.001 BOT cap per action. Testnet: the full bazaar, uncapped. |
-| Play it | **[play.metah.dev](https://play.metah.dev/)** opens on mainnet; [testnet](https://play.metah.dev/?network=testnet) and [demo](https://play.metah.dev/?network=demo) (runs inside your browser) have the bazaar without a cap |
+| Run it | Open source (MIT). No hosted site: clone the repo and run the web client yourself, see [Run it yourself](#run-it-yourself) |
 | Chain | BOT Chain mainnet (chain id 677) and testnet (968), EVM |
 | License | MIT |
 
@@ -48,6 +48,20 @@ practice round, and try the capped test market.
 
 The sponsor tank's counters (`dripCount`, `totalFunded`) are public on BOTScan: anyone can see how
 many new players it brought in and what that cost, without taking our word for it.
+
+## Run it yourself
+
+BOT Bazaar is an open-source project (MIT), not a hosted service. There is no official website for
+the game; the contracts are on BOT Chain and the client is in this repository.
+
+```bash
+git clone https://github.com/Hakhyun-Kim/bot-bazaar && cd bot-bazaar
+npm ci
+npm run dev          # web client on http://localhost:5173 (mainnet by default)
+```
+
+Add `?network=testnet` or `?network=demo` (everything runs inside your browser, no wallet or BOT
+needed) to the local URL. `npm run build` produces static files in `web/dist/` you can host yourself.
 
 ---
 
@@ -333,13 +347,12 @@ trader), paid orders wait in the escrow lockers at the centre, and the request b
 puppet theatre, pixel easel and project gate stand on the paths. Walk with WASD or by tapping the
 ground, click anything to trade in a side panel. The other tabs are the same data as plain lists.
 
-The quickest way to click around is the [published page](https://play.metah.dev/?network=demo)
-(or `npm run dev` with no chain). Until a network has a deployment it opens on **Demo (in this
-browser)**: [`web/src/demo.ts`](web/src/demo.ts) runs the compiled contracts on an ethereumjs EVM in
+The quickest way to click around is `npm run dev` with no chain, then `?network=demo`. Until a
+network has a deployment it opens on **Demo (in this browser)**: [`web/src/demo.ts`](web/src/demo.ts) runs the compiled contracts on an ethereumjs EVM in
 the page, with four funded players to switch between, seed shops, requests, designs and a live Bot
 or Not round, and a ⏩ +1 day button for escrow and reveal timing. Transactions are kept in
-localStorage and replayed on reload; Reset starts over. `.github/workflows/pages.yml` rebuilds the
-page on every push to `main`.
+localStorage and replayed on reload; Reset starts over. There is no hosted copy; `npm run build` writes
+static files to `web/dist/` that anyone can serve from any static host.
 
 To click around against a real node:
 
