@@ -192,6 +192,17 @@ test("Bolt only quotes real numbers and the real pick of the day", async () => {
   assert.equal(typeof boltIdleLine(1, "1", "x", 0.9999), "string");
 });
 
+test("Bolt names the player's next quest every other tap, and only an open one", async () => {
+  const { boltTalkLine } = await import("../web/src/world/errands.ts");
+  const lines = ["a", "b", "c"];
+  const q = { title: "Look at a frame in the gallery", hint: "Walk up to one." };
+  assert.deepEqual([0, 1, 2, 3, 4].map((i) => boltTalkLine(i, lines, null)), ["a", "b", "c", "a", "b"]);
+  const said = [0, 1, 2, 3, 4, 5].map((i) => boltTalkLine(i, lines, q));
+  assert.equal(said[0], "Next for you: Look at a frame in the gallery. Walk up to one.");
+  assert.deepEqual([said[1], said[3], said[5]], ["a", "b", "c"]);
+  assert.ok(said[2].startsWith("Next for you"));
+});
+
 test("the Telegram share link carries the design link and text, encoded", async () => {
   const { telegramShare } = await import("../web/src/pixel.ts");
   const u = new URL(telegramShare("https://play.metah.dev/?design=12", 'I drew "Lantern" & more'));

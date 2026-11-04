@@ -14,7 +14,7 @@ import { PRESET16, decodePixels } from "../pixel";
 import { Trader, type Mood } from "./characters";
 import { BlobShadow, Props, type PropAt } from "./props";
 import { GRAD, INK, hue } from "./toon";
-import { boltIdleLine, completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
+import { boltIdleLine, boltTalkLine, completeErrand, errandFor, loadErrand, type ErrandId, type ErrandState } from "./errands";
 import { joinMarket, leaveMarket, myName, onPeerEmote, peers, peersVersion, setMyName, subscribePeers, tellEmote, tellPose } from "./peers";
 import { QUESTS, completeQuest, currentQuest, endQuests, finishTour, foldQuests, guideQuest, isLocked, onQuestDone, questCount, quests, questsComplete, setQuestSoon, skipTour, stopGuide, subscribeTour, tour, walkTour, type Quest, type QuestId } from "./tour";
 import { BEACH_IN, WaterPark, useLevel } from "./waterpark";
@@ -296,10 +296,11 @@ function finishErrand(id: ErrandId) {
 function talk(r: Resident) {
   const i = lineIndex.get(r.id) ?? 0;
   lineIndex.set(r.id, i + 1);
-  bubbles.set(r.id, { text: r.lines[i % r.lines.length], until: performance.now() + 5200 });
+  completeQuest("hello");
+  const next = r.id === "bolt" && !questsComplete(quests(), tour.soon) ? currentQuest(quests(), tour.soon) : null;
+  bubbles.set(r.id, { text: r.id === "bolt" ? boltTalkLine(i, r.lines, next) : r.lines[i % r.lines.length], until: performance.now() + 5200 });
   chatEmit();
   finishErrand("talk");
-  completeQuest("hello");
 }
 
 /** A line said unasked. Bolt reads the real numbers off the billboard and names the gallery's pick of the day. */

@@ -106,3 +106,9 @@ export function boltIdleLine(total: number, day: string, pick: string | null, rn
   const lines = [tip, ...(total ? [`${total} designs on chain so far. ${day} in the last day!`] : []), ...(pick ? [`Today's pick in the gallery: “${pick}”. Older, still good.`] : [])];
   return lines[Math.min(lines.length - 1, Math.floor(rnd * lines.length))];
 }
+
+/** What Bolt says when tapped: with an open quest every other tap names it, so the market guide points at the player's own next step. */
+export function boltTalkLine(i: number, lines: string[], next: { title: string; hint: string } | null): string {
+  if (!next) return lines[i % lines.length];
+  return i % 2 === 0 ? `Next for you: ${next.title}. ${next.hint}` : lines[(i >> 1) % lines.length];
+}
